@@ -1,0 +1,12 @@
+2014-05-01 open Liabilities:CreditCard:CapitalOne  
+2014-05-01 open Liabilities:CreditCard:CapitalOne
+2014-05-01 close Liabilities:CreditCard:CapitalOne  
+2014-05-01 close Liabilities:CreditCard:CapitalOne
+
+2014-05-05 * "Cafe Mogador"
+  Expenses:Restaurant                       D 37.45 USD
+  Liabilities:CreditCard:CapitalOne         C 37.45 USD
+
+2014-05-05 * "Cafe Mogador 2" "Lamb tagine with wine 2"
+  Expenses:Restaurant                       D 37.47 USD
+  Liabilities:CreditCard:CapitalOne         C 37.47 USD
