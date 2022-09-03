@@ -136,22 +136,26 @@ proc printTransaction(transaction: Transaction) =
     echo "\t", &"{record.account} ", &"{record.norm} ", &"{record.amount} ", record.currency.string
 
 let parser = peg("input", buffer: TransactionBuffer):
-  input <- *Space * >(*decl * *Space) * *transactionDecl:
-    echo $1
+  input <- *Space * *>(*decl * Space):
+    echo $0
 
-  decl <- openDecl | closeDecl | transactionDecl
-  openDecl <- >date * +Blank * "open" * +Blank * account * *Blank * ?"\n"
-  closeDecl <- >date * +Blank * "close" * +Blank * account * *Blank * ?"\n"
-  # accountHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank * >?note * *Blank * "\n":
-
+  decl <- openDecl | closeDecl | balanceDecl | padDecl | noteDecl | priceDecl | transactionDecl
+  openDecl <- date * +Blank * "open" * +Blank * account * *Blank * ?"\n"
+  closeDecl <- date * +Blank * "close" * +Blank * account * *Blank * ?"\n"
+  balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank * amount * +Blank * currency * *Blank * ?"\n"
+  padDecl <- date * +Blank * "pad" * +Blank * account * +Blank * account * *Blank * ?"\n"
+  noteDecl <- date * +Blank * "note" * +Blank * account * +Blank * note * *Blank * ?"\n"
+  priceDecl <- date * +Blank * "price" * +Blank * currency * +Blank * amount * +Blank * currency * *Blank * ?"\n"
+  # TODO: Event
   transactionDecl <- transactionHeader * +record * ?"\n"
+
   transactionHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank * >?note * *Blank * "\n":
     buffer.newEntry = true
     buffer.index += 1
     buffer.dates.add(parse($1, "yyyy-MM-dd"))
     buffer.payees.add($2)
     buffer.notes.add($3)
-  record <- *Blank * >account * *Blank * >norm * *Blank * >amount * *Blank * >currency * *Blank * ?"\n":
+  record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank * >currency * *Blank * ?"\n":
     if buffer.newEntry:
       buffer.records.add(@[Record(account: parseAccount($1), norm: parseNorm($2), amount: parseFloat($3), currency: Currency($4))])
       buffer.newEntry = false
@@ -166,7 +170,7 @@ let parser = peg("input", buffer: TransactionBuffer):
   
   amount <- +Digit * "." * Digit[2]
   norm <- "D" | "C"
-  currency <- +Alpha
+  currency <- +Alnum
   date <- Digit[4] * "-" * Digit[2] * "-" * Digit[2]
   payee <- "\"" * *(" " | +Alnum) * "\""
   note <- "\"" * *(" " | +Alnum) * "\""
