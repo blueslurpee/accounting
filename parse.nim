@@ -1,3 +1,5 @@
+# Depends on https://github.com/status-im/nim-decimal
+
 import std/[strformat, times, sugar, sequtils]
 import npeg, strutils, tables
 import decimal/decimal
