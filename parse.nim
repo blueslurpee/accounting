@@ -1,26 +1,31 @@
 # Depends on https://github.com/status-im/nim-decimal
 
-import std/[strformat, times, sugar, sequtils]
+import std/[times, options]
 import npeg, strutils, tables
 import decimal/decimal
 
 import results
 export results
 
-const filename = "./test.txt"
+type R = Result[void, string]
+
+type ParseError = object of ValueError
+type LogicError = object of ValueError
 
 type
   Currency = distinct string
   Norm = enum
     Debit
     Credit
+
+type
   AccountType = enum
-    Asset
-    Liability
-    Equity
-    Revenue
-    Expense
-    Draw
+    Asset = "Assets"
+    Liability = "Liabilities"
+    Equity = "Equity"
+    Revenue = "Revenue"
+    Expense = "Expenses"
+    Draw = "Draws"
   AccountNodeType = enum
     Parent
     Leaf
@@ -35,6 +40,14 @@ type
     accountType: AccountType
     norm: Norm
     self: AccountNode
+  OptionalAccountData = tuple
+    open: Option[DateTime]
+    close: Option[DateTime]
+  AccountData = tuple
+    open: DateTime
+    close: DateTime
+
+type
   Transaction = object
     index: int
     date: DateTime
@@ -46,20 +59,21 @@ type
     norm: Norm
     amount: DecimalType
     currency: Currency
+  Verifier = proc(transaction: Transaction): R
 
 type
+  AccountBuffer = Table[string, OptionalAccountData]
   TransactionBuffer = object
     index: int
+    lastDate: DateTime
     newEntry: bool
     dates: seq[DateTime]
     payees: seq[string]
     notes: seq[string]
     records: seq[seq[Record]]
-
-type R = Result[void, string]
-
-let accounts: Table[string, Account] = initTable[string, Account]()
-var buffer: TransactionBuffer
+  Buffer = object
+    accounts: AccountBuffer
+    transactions: TransactionBuffer
 
 proc parseAccountType(accountType: string): AccountType = 
   case accountType
@@ -109,6 +123,16 @@ proc parseAccount(account: string): Account =
   
   return Account(accountType: accountType, norm: accountTypeToNorm(accountType), self: generateAccountNodes(accountIdentifiers))
 
+proc key(account: Account): string = 
+  result = $account.accountType & ":" 
+  var current = account.self
+
+  while current.kind != Leaf:
+    result.add(current.v & ":")
+    current = current.succ
+
+  result.add(current.v)
+
 proc parseNorm(norm: string): Norm = 
   case norm
   of "D":
@@ -118,81 +142,91 @@ proc parseNorm(norm: string): Norm =
   else: 
     raise newException(ValueError, "Invalid Norm")
 
-proc verifyEqualDebitsAndCredits(transaction: Transaction): R = 
-  let debits = transaction.records.filter(t => t.norm == Debit)
-  let credits = transaction.records.filter(t => t.norm == Credit)
+proc parseFileIntoBuffer(filename: string, buffer: var Buffer): Buffer = 
+  let parser = peg("input", buffer: Buffer):
+    input <- *Space * *(>decl * *Space)
+    decl <- openDecl | closeDecl | balanceDecl | padDecl | noteDecl | priceDecl | transactionDecl
 
-  let startAmount = newDecimal("0.00")
-  let debitAmount = foldl(debits, a + b.amount, startAmount)
-  let creditAmount = foldl(credits, a + b.amount, startAmount)
+    openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * ?"\n":
+      let date = parse($1, "yyyy-MM-dd")
+      let account = parseAccount($2)
 
-  if debitAmount == creditAmount:
-    return R.ok
-  else:
-    return R.err "Debits and Credits must sum to 0"
+      if account.key in buffer.accounts:
+        if buffer.accounts[account.key].open.isSome:
+          raise newException(ParseError, "Cannot define multiple open directives for the same account")
+        else:
+          buffer.accounts[account.key].open = some(date)
+      else:
+        buffer.accounts[account.key] = (open: some(date), close: none(DateTime))
 
-proc printTransaction(transaction: Transaction) = 
-  echo &"Date: {transaction.date.getDateStr}"
-  echo &"Payee: {transaction.payee}"
-  echo &"Note: {transaction.note}"
-  echo "Records:"
-  for record in transaction.records:
-    echo "\t", &"{record.account} ", &"{record.norm} ", &"{record.amount} ", record.currency.string
+    closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * ?"\n":
+      let date = parse($1, "yyyy-MM-dd")
+      let account = parseAccount($2)
 
-let parser = peg("input", buffer: TransactionBuffer):
-  input <- *Space * *>(*decl * Space):
-    echo $0
+      if account.key in buffer.accounts:
+        if buffer.accounts[account.key].close.isSome:
+          raise newException(ParseError, "Cannot define multiple close directives for the same account")
+        else:
+          buffer.accounts[account.key].close = some(date)
+      else:
+        buffer.accounts[account.key] = (open: none(DateTime), close: some(date))
 
-  decl <- openDecl | closeDecl | balanceDecl | padDecl | noteDecl | priceDecl | transactionDecl
-  openDecl <- date * +Blank * "open" * +Blank * account * *Blank * ?"\n"
-  closeDecl <- date * +Blank * "close" * +Blank * account * *Blank * ?"\n"
-  balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank * amount * +Blank * currency * *Blank * ?"\n"
-  padDecl <- date * +Blank * "pad" * +Blank * account * +Blank * account * *Blank * ?"\n"
-  noteDecl <- date * +Blank * "note" * +Blank * account * +Blank * note * *Blank * ?"\n"
-  priceDecl <- date * +Blank * "price" * +Blank * currency * +Blank * amount * +Blank * currency * *Blank * ?"\n"
-  # TODO: Event
-  transactionDecl <- transactionHeader * +record * ?"\n"
+    balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank * amount * +Blank * currency * *Blank * ?"\n"
+    padDecl <- date * +Blank * "pad" * +Blank * account * +Blank * account * *Blank * ?"\n"
+    noteDecl <- date * +Blank * "note" * +Blank * account * +Blank * note * *Blank * ?"\n"
+    priceDecl <- date * +Blank * "price" * +Blank * currency * +Blank * amount * +Blank * currency * *Blank * ?"\n"
+    transactionDecl <- transactionHeader * +record * ?"\n"
 
-  transactionHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank * >?note * *Blank * "\n":
-    buffer.newEntry = true
-    buffer.index += 1
-    buffer.dates.add(parse($1, "yyyy-MM-dd"))
-    buffer.payees.add($2)
-    buffer.notes.add($3)
-  record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank * >currency * *Blank * ?"\n":
-    if buffer.newEntry:
-      buffer.records.add(@[Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4))])
-      buffer.newEntry = false
-    else:
-      buffer.records[^1].add(Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4)))
-  
-  account <- accountType * ":" * accountTree
-  accountType <- "Assets" | "Liabilities" | "Equity" | "Revenue" | "Expenses" | "Draws"
-  accountTree <- *accountParent * accountLeaf
-  accountParent <- +Alnum * ":"
-  accountLeaf <- +Alnum
-  
-  amount <- +Digit * "." * Digit[2]
-  norm <- "D" | "C"
-  currency <- +Alnum
-  date <- Digit[4] * "-" * Digit[2] * "-" * Digit[2]
-  payee <- "\"" * *(" " | +Alnum) * "\""
-  note <- "\"" * *(" " | +Alnum) * "\""
+    transactionHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank * >?note * *Blank * "\n":
+      let date: DateTime = parse($1, "yyyy-MM-dd")
 
-let result = parser.matchFile(filename, buffer)
+      buffer.transactions.newEntry = true
+      buffer.transactions.index += 1
+      buffer.transactions.dates.add(date)
+      buffer.transactions.payees.add($2)
+      buffer.transactions.notes.add($3)
 
-doAssert result.ok
+      if (date > buffer.transactions.lastDate):
+        buffer.transactions.lastDate = date
 
-for i in 0 .. buffer.index - 1:
-  let note = if buffer.notes[i] != "": buffer.notes[i] else: "n/a"
-  let transaction = Transaction(index: i, date: buffer.dates[i], payee: buffer.payees[i], note: note, records: buffer.records[i])
+    record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank * >currency * *Blank * ?"\n":
+      if buffer.transactions.newEntry:
+        buffer.transactions.records.add(@[Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4))])
+        buffer.transactions.newEntry = false
+      else:
+        buffer.transactions.records[^1].add(Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4)))
+    
+    account <- accountType * ":" * accountTree
+    accountType <- "Assets" | "Liabilities" | "Equity" | "Revenue" | "Expenses" | "Draws"
+    accountTree <- *accountParent * accountLeaf
+    accountParent <- +Alnum * ":"
+    accountLeaf <- +Alnum
+    
+    amount <- +Digit * "." * Digit[2]
+    norm <- "D" | "C"
+    currency <- +Alnum
+    date <- Digit[4] * "-" * Digit[2] * "-" * Digit[2]
+    payee <- "\"" * *(" " | +Alnum) * "\""
+    note <- "\"" * *(" " | +Alnum) * "\""
 
-  let equalDebitsAndCredits = verifyEqualDebitsAndCredits(transaction)
-  if equalDebitsAndCredits.isOk:
-    echo &"--- TRANSACTION {transaction.index + 1} ---"
-    printTransaction(transaction)
-  else:
-    echo &"--- TRANSACTION {transaction.index + 1} ---"
-    echo &"Invalid Transaction - {equalDebitsAndCredits.error}"
+  let parseResult = parser.matchFile(filename, buffer)
+  doAssert parseResult.ok
+  result = buffer
 
-  echo "\n"
+proc transferBuffer(buffer: Buffer): (Table[string, AccountData], seq[Transaction]) = 
+  for key in buffer.accounts.keys:
+    let open = buffer.accounts[key].open
+    let close = buffer.accounts[key].close
+
+    if open.isNone:
+      raise newException(LogicError, "Account must have an opening date")
+
+    let concreteOpen = open.get
+    let concreteClose = if close.isSome: close.get else: buffer.transactions.lastDate
+
+    result[0][key] = (open: concreteOpen, close: concreteClose)
+
+  for i in 0 .. buffer.transactions.index - 1:
+    let note = if buffer.transactions.notes[i] != "": buffer.transactions.notes[i] else: "n/a"
+    let transaction = Transaction(index: i, date: buffer.transactions.dates[i], payee: buffer.transactions.payees[i], note: note, records: buffer.transactions.records[i])
+    result[1].add(transaction)
