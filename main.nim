@@ -8,7 +8,7 @@ import parse
 import core
 import report
 
-const filename = "./test.txt"
+const filename = "./journal/test.txt"
 
 var buffer: Buffer = Buffer(accounts: initTable[string, OptionalAccount](),
     transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,
