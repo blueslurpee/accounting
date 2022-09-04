@@ -15,7 +15,7 @@ type
     Credit
 
 type
-  AccountType* = enum
+  AccountKind* = enum
     Asset = "Assets"
     Liability = "Liabilities"
     Equity = "Equity"
@@ -32,16 +32,19 @@ type
       succ*: AccountNode
     of Leaf:
       discard
-  Account* = object
-    accountType*: AccountType
-    norm*: Norm
-    self*: AccountNode
-  OptionalAccountData* = tuple
+  OptionalAccount* = tuple
+    key: string
+    kind: AccountKind
+    norm: Norm
     open: Option[DateTime]
     close: Option[DateTime]
-  AccountData* = tuple
+  Account* = tuple
+    key: string
+    kind: AccountKind
+    norm: Norm
     open: DateTime
     close: DateTime
+    balance: DecimalType
 
 type
   Transaction* = object
@@ -51,14 +54,14 @@ type
     note*: string
     records*: seq[Record]
   Record* = object
-    account*: Account
+    accountKey*: string
     norm*: Norm
     amount*: DecimalType
     currency*: Currency
   Verifier* = proc(transaction: Transaction): R
 
 type
-  AccountBuffer* = Table[string, OptionalAccountData]
+  AccountBuffer* = Table[string, OptionalAccount]
   TransactionBuffer* = object
     index*: int
     lastDate*: DateTime
@@ -71,10 +74,13 @@ type
     accounts*: AccountBuffer
     transactions*: TransactionBuffer
 
+type Ledger* = tuple
+  accounts: Table[string, Account]
+  transactions: seq[Transaction]
 
-proc key*(account: Account): string =
-  result = $account.accountType & ":"
-  var current = account.self
+
+proc key*(account: AccountNode): string =
+  var current = account
 
   while current.kind != Leaf:
     result.add(current.v & ":")

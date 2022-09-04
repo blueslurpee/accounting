@@ -6,8 +6,8 @@ import results # https://github.com/arnetheduck/nim-result
 
 import types
 
-proc parseAccountType(accountType: string): AccountType =
-  case accountType
+proc parseAccountKind(accountKind: string): AccountKind =
+  case accountKind
   of "Assets":
     return Asset
   of "Liabilities":
@@ -32,8 +32,8 @@ proc generateAccountNodes(nodeList: seq[string]): AccountNode =
   else:
     raise newException(RangeDefect, "Invalid Account Node List")
 
-proc accountTypeToNorm(accountType: AccountType): Norm =
-  case accountType
+proc accountKindToNorm(accountKind: AccountKind): Norm =
+  case accountKind
   of Asset:
     result = Debit
   of Liability:
@@ -47,14 +47,12 @@ proc accountTypeToNorm(accountType: AccountType): Norm =
   of Draw:
     result = Debit
 
-proc parseAccount(account: string): Account =
-  let elements = account.split(":")
+proc parseAccount(key: string): OptionalAccount =
+  let elements = key.split(":")
+  let kind = parseAccountKind(elements[0])
 
-  let accountType = parseAccountType(elements[0])
-  let accountIdentifiers = elements[1..^1]
-
-  return Account(accountType: accountType, norm: accountTypeToNorm(accountType),
-      self: generateAccountNodes(accountIdentifiers))
+  return (key: key, kind: kind, norm: accountKindToNorm(kind), open: none(
+      DateTime), close: none(DateTime))
 
 proc parseNorm(norm: string): Norm =
   case norm
@@ -83,7 +81,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         else:
           buffer.accounts[account.key].open = some(date)
       else:
-        buffer.accounts[account.key] = (open: some(date), close: none(DateTime))
+        buffer.accounts[account.key] = (key: account.key, kind: account.kind,
+            norm: account.norm, open: some(date), close: none(DateTime))
 
     closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
@@ -95,7 +94,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         else:
           buffer.accounts[account.key].close = some(date)
       else:
-        buffer.accounts[account.key] = (open: none(DateTime), close: some(date))
+        buffer.accounts[account.key] = (key: account.key, kind: account.kind,
+            norm: account.norm, open: none(DateTime), close: some(date))
 
     balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank *
         amount * +Blank * currency * *Blank * ?"\n"
@@ -121,17 +121,17 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         buffer.transactions.lastDate = date
 
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
-        >currency * *Blank * ?"\n":
+        > currency * *Blank * ?"\n":
       if buffer.transactions.newEntry:
-        buffer.transactions.records.add(@[Record(account: parseAccount($1),
+        buffer.transactions.records.add(@[Record(accountKey: $1,
             norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4))])
         buffer.transactions.newEntry = false
       else:
-        buffer.transactions.records[^1].add(Record(account: parseAccount($1),
+        buffer.transactions.records[^1].add(Record(accountKey: $1,
             norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4)))
 
-    account <- accountType * ":" * accountTree
-    accountType <- "Assets" | "Liabilities" | "Equity" | "Revenue" |
+    account <- accountKind * ":" * accountTree
+    accountKind <- "Assets" | "Liabilities" | "Equity" | "Revenue" |
         "Expenses" | "Draws"
     accountTree <- *accountParent * accountLeaf
     accountParent <- +Alnum * ":"
@@ -148,10 +148,12 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   doAssert parseResult.ok
   result = buffer
 
-proc transferBuffer*(buffer: Buffer): (Table[string, AccountData], seq[Transaction]) =
+proc transferBufferToLedger*(buffer: Buffer): Ledger =
   for key in buffer.accounts.keys:
-    let open = buffer.accounts[key].open
-    let close = buffer.accounts[key].close
+    let account = buffer.accounts[key]
+
+    let open = account.open
+    let close = account.close
 
     if open.isNone:
       raise newException(LogicError, "Account must have an opening date")
@@ -159,7 +161,9 @@ proc transferBuffer*(buffer: Buffer): (Table[string, AccountData], seq[Transacti
     let concreteOpen = open.get
     let concreteClose = if close.isSome: close.get else: buffer.transactions.lastDate
 
-    result[0][key] = (open: concreteOpen, close: concreteClose)
+    result.accounts[key] = (key: account.key, kind: account.kind,
+        norm: account.norm, open: concreteOpen, close: concreteClose,
+        balance: newDecimal("0.00"))
 
   for i in 0 .. buffer.transactions.index - 1:
     let note = if buffer.transactions.notes[i] != "": buffer.transactions.notes[i] else: "n/a"
