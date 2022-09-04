@@ -1,5 +1,6 @@
 import std/[strformat, times, sugar, sequtils]
 import npeg, strutils, tables
+import decimal/decimal
 
 import results
 export results
@@ -41,7 +42,7 @@ type
   Record = object
     account: Account
     norm: Norm
-    amount: float
+    amount: DecimalType
     currency: Currency
 
 type
@@ -119,8 +120,9 @@ proc verifyEqualDebitsAndCredits(transaction: Transaction): R =
   let debits = transaction.records.filter(t => t.norm == Debit)
   let credits = transaction.records.filter(t => t.norm == Credit)
 
-  let debitAmount = foldl(debits, a + b.amount, 0.0)
-  let creditAmount = foldl(credits, a + b.amount, 0.0)
+  let startAmount = newDecimal("0.00")
+  let debitAmount = foldl(debits, a + b.amount, startAmount)
+  let creditAmount = foldl(credits, a + b.amount, startAmount)
 
   if debitAmount == creditAmount:
     return R.ok
@@ -157,10 +159,10 @@ let parser = peg("input", buffer: TransactionBuffer):
     buffer.notes.add($3)
   record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank * >currency * *Blank * ?"\n":
     if buffer.newEntry:
-      buffer.records.add(@[Record(account: parseAccount($1), norm: parseNorm($2), amount: parseFloat($3), currency: Currency($4))])
+      buffer.records.add(@[Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4))])
       buffer.newEntry = false
     else:
-      buffer.records[^1].add(Record(account: parseAccount($1), norm: parseNorm($2), amount: parseFloat($3), currency: Currency($4)))
+      buffer.records[^1].add(Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4)))
   
   account <- accountType * ":" * accountTree
   accountType <- "Assets" | "Liabilities" | "Equity" | "Revenue" | "Expenses" | "Draws"
@@ -192,4 +194,3 @@ for i in 0 .. buffer.index - 1:
     echo &"Invalid Transaction - {equalDebitsAndCredits.error}"
 
   echo "\n"
-
