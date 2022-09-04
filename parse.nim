@@ -1,79 +1,10 @@
-# Depends on https://github.com/status-im/nim-decimal
-
 import std/[times, options]
-import npeg, strutils, tables
-import decimal/decimal
+import strutils, tables
+import npeg # https://github.com/zevv/npeg
+import decimal/decimal # https://github.com/status-im/nim-decimal
+import results # https://github.com/arnetheduck/nim-result
 
-import results
-export results
-
-type R = Result[void, string]
-
-type ParseError = object of ValueError
-type LogicError = object of ValueError
-
-type
-  Currency = distinct string
-  Norm = enum
-    Debit
-    Credit
-
-type
-  AccountType = enum
-    Asset = "Assets"
-    Liability = "Liabilities"
-    Equity = "Equity"
-    Revenue = "Revenue"
-    Expense = "Expenses"
-    Draw = "Draws"
-  AccountNodeType = enum
-    Parent
-    Leaf
-  AccountNode = ref object
-    v: string
-    case kind: AccountNodeType  # the `kind` field is the discriminator
-    of Parent: 
-      succ: AccountNode
-    of Leaf:
-      discard
-  Account = object
-    accountType: AccountType
-    norm: Norm
-    self: AccountNode
-  OptionalAccountData = tuple
-    open: Option[DateTime]
-    close: Option[DateTime]
-  AccountData = tuple
-    open: DateTime
-    close: DateTime
-
-type
-  Transaction = object
-    index: int
-    date: DateTime
-    payee: string
-    note: string
-    records: seq[Record]
-  Record = object
-    account: Account
-    norm: Norm
-    amount: DecimalType
-    currency: Currency
-  Verifier = proc(transaction: Transaction): R
-
-type
-  AccountBuffer = Table[string, OptionalAccountData]
-  TransactionBuffer = object
-    index: int
-    lastDate: DateTime
-    newEntry: bool
-    dates: seq[DateTime]
-    payees: seq[string]
-    notes: seq[string]
-    records: seq[seq[Record]]
-  Buffer = object
-    accounts: AccountBuffer
-    transactions: TransactionBuffer
+import types
 
 proc parseAccountType(accountType: string): AccountType = 
   case accountType
@@ -142,7 +73,9 @@ proc parseNorm(norm: string): Norm =
   else: 
     raise newException(ValueError, "Invalid Norm")
 
-proc parseFileIntoBuffer(filename: string, buffer: var Buffer): Buffer = 
+proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer = 
+  var buffer = buffer
+
   let parser = peg("input", buffer: Buffer):
     input <- *Space * *(>decl * *Space)
     decl <- openDecl | closeDecl | balanceDecl | padDecl | noteDecl | priceDecl | transactionDecl
@@ -213,7 +146,7 @@ proc parseFileIntoBuffer(filename: string, buffer: var Buffer): Buffer =
   doAssert parseResult.ok
   result = buffer
 
-proc transferBuffer(buffer: Buffer): (Table[string, AccountData], seq[Transaction]) = 
+proc transferBuffer*(buffer: Buffer): (Table[string, AccountData], seq[Transaction]) = 
   for key in buffer.accounts.keys:
     let open = buffer.accounts[key].open
     let close = buffer.accounts[key].close
