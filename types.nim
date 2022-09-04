@@ -27,8 +27,8 @@ type
     Leaf
   AccountNode* = ref object
     v*: string
-    case kind*: AccountNodeType  # the `kind` field is the discriminator
-    of Parent: 
+    case kind*: AccountNodeType # the `kind` field is the discriminator
+    of Parent:
       succ*: AccountNode
     of Leaf:
       discard

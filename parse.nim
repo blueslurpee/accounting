@@ -6,7 +6,7 @@ import results # https://github.com/arnetheduck/nim-result
 
 import types
 
-proc parseAccountType(accountType: string): AccountType = 
+proc parseAccountType(accountType: string): AccountType =
   case accountType
   of "Assets":
     return Asset
@@ -20,18 +20,19 @@ proc parseAccountType(accountType: string): AccountType =
     return Expense
   of "Draws":
     return Draw
-  else: 
+  else:
     raise newException(ValueError, "Invalid Account Type")
 
 proc generateAccountNodes(nodeList: seq[string]): AccountNode =
   if nodeList.len == 1:
     return AccountNode(kind: AccountNodeType.Leaf, v: nodeList[0])
   elif nodeList.len > 1:
-    return AccountNode(kind: AccountNodeType.Parent, v: nodeList[0], succ: generateAccountNodes(nodeList[1 .. ^1]))
+    return AccountNode(kind: AccountNodeType.Parent, v: nodeList[0],
+        succ: generateAccountNodes(nodeList[1 .. ^1]))
   else:
     raise newException(RangeDefect, "Invalid Account Node List")
-  
-proc accountTypeToNorm(accountType: AccountType): Norm = 
+
+proc accountTypeToNorm(accountType: AccountType): Norm =
   case accountType
   of Asset:
     result = Debit
@@ -46,16 +47,17 @@ proc accountTypeToNorm(accountType: AccountType): Norm =
   of Draw:
     result = Debit
 
-proc parseAccount(account: string): Account = 
+proc parseAccount(account: string): Account =
   let elements = account.split(":")
 
   let accountType = parseAccountType(elements[0])
   let accountIdentifiers = elements[1..^1]
-  
-  return Account(accountType: accountType, norm: accountTypeToNorm(accountType), self: generateAccountNodes(accountIdentifiers))
 
-proc key(account: Account): string = 
-  result = $account.accountType & ":" 
+  return Account(accountType: accountType, norm: accountTypeToNorm(accountType),
+      self: generateAccountNodes(accountIdentifiers))
+
+proc key(account: Account): string =
+  result = $account.accountType & ":"
   var current = account.self
 
   while current.kind != Leaf:
@@ -64,21 +66,22 @@ proc key(account: Account): string =
 
   result.add(current.v)
 
-proc parseNorm(norm: string): Norm = 
+proc parseNorm(norm: string): Norm =
   case norm
   of "D":
     return Debit
   of "C":
-    return Credit 
-  else: 
+    return Credit
+  else:
     raise newException(ValueError, "Invalid Norm")
 
-proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer = 
+proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   var buffer = buffer
 
   let parser = peg("input", buffer: Buffer):
-    input <- *Space * *(>decl * *Space)
-    decl <- openDecl | closeDecl | balanceDecl | padDecl | noteDecl | priceDecl | transactionDecl
+    input <- *Space * *( > decl * *Space)
+    decl <- openDecl | closeDecl | balanceDecl | padDecl | noteDecl |
+        priceDecl | transactionDecl
 
     openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
@@ -104,13 +107,18 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
       else:
         buffer.accounts[account.key] = (open: none(DateTime), close: some(date))
 
-    balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank * amount * +Blank * currency * *Blank * ?"\n"
-    padDecl <- date * +Blank * "pad" * +Blank * account * +Blank * account * *Blank * ?"\n"
-    noteDecl <- date * +Blank * "note" * +Blank * account * +Blank * note * *Blank * ?"\n"
-    priceDecl <- date * +Blank * "price" * +Blank * currency * +Blank * amount * +Blank * currency * *Blank * ?"\n"
+    balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank *
+        amount * +Blank * currency * *Blank * ?"\n"
+    padDecl <- date * +Blank * "pad" * +Blank * account * +Blank * account *
+        *Blank * ?"\n"
+    noteDecl <- date * +Blank * "note" * +Blank * account * +Blank * note *
+        *Blank * ?"\n"
+    priceDecl <- date * +Blank * "price" * +Blank * currency * +Blank * amount *
+        +Blank * currency * *Blank * ?"\n"
     transactionDecl <- transactionHeader * +record * ?"\n"
 
-    transactionHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank * >?note * *Blank * "\n":
+    transactionHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank *
+        >?note * *Blank * "\n":
       let date: DateTime = parse($1, "yyyy-MM-dd")
 
       buffer.transactions.newEntry = true
@@ -122,19 +130,23 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
       if (date > buffer.transactions.lastDate):
         buffer.transactions.lastDate = date
 
-    record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank * >currency * *Blank * ?"\n":
+    record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
+        >currency * *Blank * ?"\n":
       if buffer.transactions.newEntry:
-        buffer.transactions.records.add(@[Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4))])
+        buffer.transactions.records.add(@[Record(account: parseAccount($1),
+            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4))])
         buffer.transactions.newEntry = false
       else:
-        buffer.transactions.records[^1].add(Record(account: parseAccount($1), norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4)))
-    
+        buffer.transactions.records[^1].add(Record(account: parseAccount($1),
+            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4)))
+
     account <- accountType * ":" * accountTree
-    accountType <- "Assets" | "Liabilities" | "Equity" | "Revenue" | "Expenses" | "Draws"
+    accountType <- "Assets" | "Liabilities" | "Equity" | "Revenue" |
+        "Expenses" | "Draws"
     accountTree <- *accountParent * accountLeaf
     accountParent <- +Alnum * ":"
     accountLeaf <- +Alnum
-    
+
     amount <- +Digit * "." * Digit[2]
     norm <- "D" | "C"
     currency <- +Alnum
@@ -146,7 +158,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   doAssert parseResult.ok
   result = buffer
 
-proc transferBuffer*(buffer: Buffer): (Table[string, AccountData], seq[Transaction]) = 
+proc transferBuffer*(buffer: Buffer): (Table[string, AccountData], seq[Transaction]) =
   for key in buffer.accounts.keys:
     let open = buffer.accounts[key].open
     let close = buffer.accounts[key].close
@@ -161,5 +173,7 @@ proc transferBuffer*(buffer: Buffer): (Table[string, AccountData], seq[Transacti
 
   for i in 0 .. buffer.transactions.index - 1:
     let note = if buffer.transactions.notes[i] != "": buffer.transactions.notes[i] else: "n/a"
-    let transaction = Transaction(index: i, date: buffer.transactions.dates[i], payee: buffer.transactions.payees[i], note: note, records: buffer.transactions.records[i])
+    let transaction = Transaction(index: i, date: buffer.transactions.dates[i],
+        payee: buffer.transactions.payees[i], note: note,
+        records: buffer.transactions.records[i])
     result[1].add(transaction)
