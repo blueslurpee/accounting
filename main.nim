@@ -37,6 +37,10 @@ proc verifyTransactions(transactions: seq[Transaction], verifiers: seq[Verifier]
           result = R.err(check.error)
           break verify
 
+proc printAccounts(accounts: seq[Account]): void =
+  let lengths = accounts.map(x => len(x.key))
+  let maxLength = lengths.foldl(if b > a: b else: a) 
+
 proc printTransaction(transaction: Transaction) =
   echo &"Date: {transaction.date.getDateStr}"
   echo &"Payee: {transaction.payee}"
@@ -59,3 +63,4 @@ if (checkTransactions.isOk):
     printTransaction(transaction)
 else:
   echo checkTransactions.error
+

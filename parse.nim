@@ -56,16 +56,6 @@ proc parseAccount(account: string): Account =
   return Account(accountType: accountType, norm: accountTypeToNorm(accountType),
       self: generateAccountNodes(accountIdentifiers))
 
-proc key(account: Account): string =
-  result = $account.accountType & ":"
-  var current = account.self
-
-  while current.kind != Leaf:
-    result.add(current.v & ":")
-    current = current.succ
-
-  result.add(current.v)
-
 proc parseNorm(norm: string): Norm =
   case norm
   of "D":
