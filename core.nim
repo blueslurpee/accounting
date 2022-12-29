@@ -1,4 +1,4 @@
-import std/[sequtils, sugar]
+import std/[sequtils, sugar, options]
 import tables
 
 import decimal/decimal
@@ -31,16 +31,31 @@ proc verifyTransactions*(transactions: seq[Transaction], verifiers: seq[Verifier
           result = R.err(check.error)
           break verify
 
-proc aggregateTransactions*(accounts: Table[string, Account], transactions: seq[Transaction]): Ledger = 
+proc aggregateTransactions*(accounts: Table[string, Account], exchangeAccounts: Table[string, ExchangeAccount], transactions: seq[Transaction]): Ledger = 
   var accounts = accounts
   var transactions = transactions
 
   for transaction in transactions:
     for record in transaction.records:
       let account = accounts[record.accountKey]
+
+      if record.conversionTarget.isSome:
+        let exchangeAccountKey = record.currency.string & ":" & record.conversionTarget.get().string
+        echo "EXCHANGE ACCOUNT " & exchangeAccountKey
+
+        
+        if account.norm == Norm.Debit and record.norm == Norm.Debit:
+          echo "DD"
+        if account.norm == Norm.Debit and record.norm == Norm.Credit:
+          echo "DC"
+        if account.norm == Norm.Credit and record.norm == Norm.Debit:
+          echo "CD"
+        if account.norm == Norm.Credit and record.norm == Norm.Credit:
+          echo "CC"
+
       if account.norm == record.norm:
         account.balance += record.amount
       else:
         account.balance -= record.amount
 
-  return (accounts: accounts, transactions: transactions)
+  return (accounts: accounts, exchangeAccounts: exchangeAccounts, transactions: transactions)

@@ -1,9 +1,13 @@
+exchange-pair USD:EUR
+exchange-pair USD:CHF
+exchange-pair EUR:CHF
+
 2014-05-01 open Assets:Cash  
 2014-05-01 open Liabilities:CreditCard:CapitalOne  
 2014-05-02 open Expenses:Restaurant
 
 2014-05-05 * "Cafe Mogador"
-  Assets:Cash           C 38.45 USD
+  Assets:Cash           C 38.45 USD @ 1.01 EUR
   Expenses:Restaurant   D 38.45 USD
 
 2014-05-05 * "Cafe Mogador 2" "Lamb tagine with wine 2"

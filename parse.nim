@@ -46,6 +46,8 @@ proc accountKindToNorm(accountKind: AccountKind): Norm =
     result = Debit
   of Draw:
     result = Debit
+  of Exchange:
+    result = Credit
 
 proc parseAccount(key: string): OptionalAccount =
   let elements = key.split(":")
@@ -68,8 +70,17 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
   let parser = peg("input", buffer: Buffer):
     input <- *Space * *( > decl * *Space)
-    decl <- openDecl | closeDecl | balanceDecl | padDecl | noteDecl |
-        priceDecl | transactionDecl
+    decl <- currencyDecl | openDecl | closeDecl | balanceDecl | padDecl |
+        noteDecl | priceDecl | transactionDecl
+
+    currencyDecl <- "exchange-pair" * +Blank * >currency * ":" * >currency *
+        *Blank * ?"\n":
+      let accountKey = $1 & ":" & $2
+      if accountKey in buffer.exchangeAccounts:
+        raise newException(ParseError, "Cannot define multiple identical exchange accounts")
+      buffer.exchangeAccounts[accountKey] = (key: accountKey,
+          kind: AccountKind.Exchange, norm: Norm.Credit,
+          referenceBalance: newDecimal("0.00"), securityBalance: newDecimal("0.00"))
 
     openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
@@ -121,14 +132,23 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         buffer.transactions.lastDate = date
 
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
-        > currency * *Blank * ?"\n":
+        > currency * *Blank * ?("@" * *Blank * >amount * *Blank * >currency) * ?"\n":
+      let conversionRate = (if capture.len == 7: some(newDecimal(
+          $5)) else: none(DecimalType))
+      let conversionTarget = (if capture.len == 7: some(Currency(
+          $6)) else: none(Currency))
+
       if buffer.transactions.newEntry:
         buffer.transactions.records.add(@[Record(accountKey: $1,
-            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4))])
+            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4),
+                conversionTarget: conversionTarget,
+                conversionRate: conversionRate)])
         buffer.transactions.newEntry = false
       else:
         buffer.transactions.records[^1].add(Record(accountKey: $1,
-            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4)))
+            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4),
+                conversionTarget: conversionTarget,
+                conversionRate: conversionRate))
 
     account <- accountKind * ":" * accountTree
     accountKind <- "Assets" | "Liabilities" | "Equity" | "Revenue" |
@@ -137,6 +157,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     accountParent <- +Alnum * ":"
     accountLeaf <- +Alnum
 
+    exchangeRate <- "@" * *Blank * +Digit * "." * +Digit
     amount <- +Digit * "." * Digit[2]
     norm <- "D" | "C"
     currency <- +Alnum
@@ -165,9 +186,15 @@ proc transferBufferToLedger*(buffer: Buffer): Ledger =
         norm: account.norm, open: concreteOpen, close: concreteClose,
         balance: newDecimal("0.00"))
 
+  for key in buffer.exchangeAccounts.keys:
+    result.exchangeAccounts[key] = (key: key, kind: AccountKind.Exchange,
+        norm: Norm.Credit, referenceBalance: newDecimal("0.00"),
+        securityBalance: newDecimal("0.00"))
+
+
   for i in 0 .. buffer.transactions.index - 1:
     let note = if buffer.transactions.notes[i] != "": buffer.transactions.notes[i] else: "n/a"
     let transaction = Transaction(index: i, date: buffer.transactions.dates[i],
         payee: buffer.transactions.payees[i], note: note,
         records: buffer.transactions.records[i])
-    result[1].add(transaction)
+    result.transactions.add(transaction)

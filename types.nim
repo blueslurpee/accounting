@@ -22,6 +22,7 @@ type
     Revenue = "Revenue"
     Expense = "Expenses"
     Draw = "Draws"
+    Exchange = "Exchange"
   AccountNodeType* = enum
     Parent
     Leaf
@@ -45,6 +46,12 @@ type
     open: DateTime
     close: DateTime
     balance: DecimalType
+  ExchangeAccount* = tuple
+    key: string
+    kind: AccountKind
+    norm: Norm
+    referenceBalance: DecimalType
+    securityBalance: DecimalType
 
 type
   Transaction* = object
@@ -58,10 +65,13 @@ type
     norm*: Norm
     amount*: DecimalType
     currency*: Currency
+    conversionTarget*: Option[Currency]
+    conversionRate*: Option[DecimalType]
   Verifier* = proc(transaction: Transaction): R
 
 type
   AccountBuffer* = Table[string, OptionalAccount]
+  ExchangeAccountBuffer* = Table[string, ExchangeAccount]
   TransactionBuffer* = object
     index*: int
     lastDate*: DateTime
@@ -72,10 +82,12 @@ type
     records*: seq[seq[Record]]
   Buffer* = object
     accounts*: AccountBuffer
+    exchangeAccounts*: ExchangeAccountBuffer
     transactions*: TransactionBuffer
 
 type Ledger* = tuple
   accounts: Table[string, Account]
+  exchangeAccounts: Table[string, ExchangeAccount]
   transactions: seq[Transaction]
 
 
