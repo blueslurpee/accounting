@@ -1,15 +1,16 @@
-exchange-pair USD:EUR
 exchange-pair USD:CHF
-exchange-pair EUR:CHF
 
-2014-05-01 open Assets:Cash  
-2014-05-01 open Liabilities:CreditCard:CapitalOne  
-2014-05-02 open Expenses:Restaurant
+2022-01-01 open Assets:Cash USD
+2022-01-01 open Assets:Cash CHF
 
-2014-05-05 * "Cafe Mogador"
-  Assets:Cash           C 38.45 USD @ 1.01 EUR
-  Expenses:Restaurant   D 38.45 USD
+2022-01-01 open Revenue:Operations CHF
+2022-01-01 open Expenses:Transport CHF
 
-2014-05-05 * "Cafe Mogador 2" "Lamb tagine with wine 2"
-  Liabilities:CreditCard:CapitalOne         C 37.47 USD
-  Expenses:Restaurant                       D 37.47 USD
+
+2022-01-25 * "January Revenue"
+  Assets:Cash           D 8000.00 CHF
+  Revenue:Operations    C 8000.00 CHF
+
+2022-01-27 * "GA January"
+  Assets:Cash           C 365.59 USD @ 0.93 CHF
+  Expenses:Transport    D 340.00 CHF

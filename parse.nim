@@ -1,4 +1,4 @@
-import std/[times, options]
+import std/[times, options, sets]
 import strutils, tables
 import npeg # https://github.com/zevv/npeg
 import decimal/decimal # https://github.com/status-im/nim-decimal
@@ -49,11 +49,12 @@ proc accountKindToNorm(accountKind: AccountKind): Norm =
   of Exchange:
     result = Credit
 
-proc parseAccount(key: string): OptionalAccount =
+
+proc parseAccount(key: string, currencyString: string): OptionalAccount =
   let elements = key.split(":")
   let kind = parseAccountKind(elements[0])
 
-  return (key: key, kind: kind, norm: accountKindToNorm(kind), open: none(
+  return (key: currencyString & ":" & key, kind: kind, norm: accountKindToNorm(kind), currency: Currency(currencyString), open: none(
       DateTime), close: none(DateTime))
 
 proc parseNorm(norm: string): Norm =
@@ -70,10 +71,10 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
   let parser = peg("input", buffer: Buffer):
     input <- *Space * *( > decl * *Space)
-    decl <- currencyDecl | openDecl | closeDecl | balanceDecl | padDecl |
+    decl <- exchangeDecl | openDecl | closeDecl | balanceDecl | padDecl |
         noteDecl | priceDecl | transactionDecl
 
-    currencyDecl <- "exchange-pair" * +Blank * >currency * ":" * >currency *
+    exchangeDecl <- "exchange-pair" * +Blank * >currency * ":" * >currency *
         *Blank * ?"\n":
       let accountKey = $1 & ":" & $2
       if accountKey in buffer.exchangeAccounts:
@@ -82,9 +83,9 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
           kind: AccountKind.Exchange, norm: Norm.Credit,
           referenceBalance: newDecimal("0.00"), securityBalance: newDecimal("0.00"))
 
-    openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * ?"\n":
+    openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
-      let account = parseAccount($2)
+      let account = parseAccount($2, $3)
 
       if account.key in buffer.accounts:
         if buffer.accounts[account.key].open.isSome:
@@ -93,11 +94,11 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
           buffer.accounts[account.key].open = some(date)
       else:
         buffer.accounts[account.key] = (key: account.key, kind: account.kind,
-            norm: account.norm, open: some(date), close: none(DateTime))
+            norm: account.norm, currency: account.currency, open: some(date), close: none(DateTime))
 
-    closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * ?"\n":
+    closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
-      let account = parseAccount($2)
+      let account = parseAccount($2, $3)
 
       if account.key in buffer.accounts:
         if buffer.accounts[account.key].close.isSome:
@@ -106,7 +107,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
           buffer.accounts[account.key].close = some(date)
       else:
         buffer.accounts[account.key] = (key: account.key, kind: account.kind,
-            norm: account.norm, open: none(DateTime), close: some(date))
+            norm: account.norm, currency: account.currency, open: none(DateTime), close: some(date))
 
     balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank *
         amount * +Blank * currency * *Blank * ?"\n"
@@ -132,21 +133,26 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         buffer.transactions.lastDate = date
 
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
-        > currency * *Blank * ?("@" * *Blank * >amount * *Blank * >currency) * ?"\n":
+        >currency * *Blank * ?("@" * *Blank * >amount * *Blank * >currency) * ?"\n":
       let conversionRate = (if capture.len == 7: some(newDecimal(
           $5)) else: none(DecimalType))
       let conversionTarget = (if capture.len == 7: some(Currency(
           $6)) else: none(Currency))
 
+      let currencyString = $4
+      let accountKey = currencyString & ":" & $1
+      
+      buffer.currencies.incl(currencyString)
+
       if buffer.transactions.newEntry:
-        buffer.transactions.records.add(@[Record(accountKey: $1,
-            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4),
+        buffer.transactions.records.add(@[Record(accountKey: accountKey,
+            norm: parseNorm($2), amount: newDecimal($3), currency: Currency(currencyString),
                 conversionTarget: conversionTarget,
                 conversionRate: conversionRate)])
         buffer.transactions.newEntry = false
       else:
-        buffer.transactions.records[^1].add(Record(accountKey: $1,
-            norm: parseNorm($2), amount: newDecimal($3), currency: Currency($4),
+        buffer.transactions.records[^1].add(Record(accountKey: accountKey,
+            norm: parseNorm($2), amount: newDecimal($3), currency: Currency(currencyString),
                 conversionTarget: conversionTarget,
                 conversionRate: conversionRate))
 
@@ -170,6 +176,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   result = buffer
 
 proc transferBufferToLedger*(buffer: Buffer): Ledger =
+  result.currencies = buffer.currencies
+
   for key in buffer.accounts.keys:
     let account = buffer.accounts[key]
 
@@ -183,7 +191,7 @@ proc transferBufferToLedger*(buffer: Buffer): Ledger =
     let concreteClose = if close.isSome: close.get else: buffer.transactions.lastDate
 
     result.accounts[key] = (key: account.key, kind: account.kind,
-        norm: account.norm, open: concreteOpen, close: concreteClose,
+        norm: account.norm, currency: account.currency, open: concreteOpen, close: concreteClose,
         balance: newDecimal("0.00"))
 
   for key in buffer.exchangeAccounts.keys:

@@ -1,4 +1,4 @@
-import std/[times, options]
+import std/[times, options, sets]
 import tables
 import decimal/decimal
 import results
@@ -37,12 +37,14 @@ type
     key: string
     kind: AccountKind
     norm: Norm
+    currency: Currency
     open: Option[DateTime]
     close: Option[DateTime]
   Account* = tuple
     key: string
     kind: AccountKind
     norm: Norm
+    currency: Currency
     open: DateTime
     close: DateTime
     balance: DecimalType
@@ -81,11 +83,13 @@ type
     notes*: seq[string]
     records*: seq[seq[Record]]
   Buffer* = object
+    currencies*: OrderedSet[string]
     accounts*: AccountBuffer
     exchangeAccounts*: ExchangeAccountBuffer
     transactions*: TransactionBuffer
 
 type Ledger* = tuple
+  currencies: OrderedSet[string]
   accounts: Table[string, Account]
   exchangeAccounts: Table[string, ExchangeAccount]
   transactions: seq[Transaction]

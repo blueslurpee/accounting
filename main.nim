@@ -1,4 +1,4 @@
-import std/[times]
+import std/[times, sets]
 import tables
 
 import results
@@ -11,16 +11,17 @@ import report
 const filename = "./journal/test.txt"
 
 var buffer: Buffer = Buffer(
+    currencies: initOrderedSet[string](),
     accounts: initTable[string, OptionalAccount](), 
     exchangeAccounts: initTable[string, ExchangeAccount](),
     transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,
     00, 00, utc())))
 
 var ledger = transferBufferToLedger(parseFileIntoBuffer(filename, buffer))
-let checkTransactions = verifyTransactions(ledger.transactions, @[verifyEqualDebitsAndCredits])
+let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
 
 if (checkTransactions.isOk):
-  ledger = aggregateTransactions(ledger.accounts, ledger.exchangeAccounts, ledger.transactions)
+  ledger = aggregateTransactions(ledger.currencies, ledger.accounts, ledger.exchangeAccounts, ledger.transactions)
   reportLedger(ledger)
 else:
   echo checkTransactions.error
