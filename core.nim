@@ -1,4 +1,4 @@
-import std/[sequtils, sugar, options, sets]
+import std/[sequtils, sugar, options]
 import tables
 
 import decimal/decimal
@@ -8,20 +8,20 @@ import types
 
 
 proc isMultiCurrency(transaction: Transaction): bool =
-  let currencies = transaction.records.map(r => r.currency.string).deduplicate
+  let currencies = transaction.records.map(r => r.currencyKey).deduplicate
   result = currencies.len == 2
 
 
 proc getExchangeAccountKey(transaction: Transaction): string =
-  let currencies = transaction.records.map(r => r.currency.string).deduplicate
+  let currencies = transaction.records.map(r => r.currencyKey).deduplicate
   result = currencies[0] & ":" & currencies[1]
 
 
 proc extractConversionDetails(transaction: Transaction): tuple[
-    reference: Currency, security: Currency, conversionRate: DecimalType] =
+    referenceCurrencyKey: string, securityCurrencyKey: string, conversionRate: DecimalType] =
   let definingRecord: Record = transaction.records.filter(r =>
       r.conversionTarget.isSome and r.conversionRate.isSome)[0]
-  result = (definingRecord.currency, definingRecord.conversionTarget.get(),
+  result = (definingRecord.currencyKey, definingRecord.conversionTarget.get(),
       definingRecord.conversionRate.get())
 
 
@@ -33,7 +33,7 @@ let verifyMultiCurrencyValidCurrencies*: Verifier = proc(
   if not transaction.isMultiCurrency:
     return R.ok
 
-  let currencies = transaction.records.map(r => r.currency.string).deduplicate
+  let currencies = transaction.records.map(r => r.currencyKey).deduplicate
 
   if currencies.len != 2:
     return R.err "Cannot have more than 2 currencies present in a transaction"
@@ -54,25 +54,25 @@ let verifyEqualDebitsAndCredits*: Verifier = proc(transaction: Transaction): R =
     else:
       return R.err "Debits and Credits must sum to 0"
   else:
-    let (reference, security, conversionRate) = extractConversionDetails(transaction)
+    let (referenceCurrencyKey, securityCurrencyKey, conversionRate) = extractConversionDetails(transaction)
 
     let referenceDebitAmount = transaction.records.filter(r =>
-        r.currency.string == reference.string and r.norm == Debit).foldl(a +
+        r.currencyKey == referenceCurrencyKey and r.norm == Debit).foldl(a +
         b.amount, newDecimal("0.00"))
     let referenceCreditAmount = transaction.records.filter(r =>
-        r.currency.string == reference.string and r.norm == Credit).foldl(a +
+        r.currencyKey == referenceCurrencyKey and r.norm == Credit).foldl(a +
         b.amount, newDecimal("0.00"))
     let referenceAbsDelta = (referenceDebitAmount - referenceCreditAmount).abs
 
     let securityDebitAmount = transaction.records.filter(r =>
-        r.currency.string == security.string and r.norm == Debit).foldl(a +
+        r.currencyKey == securityCurrencyKey and r.norm == Debit).foldl(a +
         b.amount, newDecimal("0.00"))
     let securityCreditAmount = transaction.records.filter(r =>
-        r.currency.string == security.string and r.norm == Credit).foldl(a +
+        r.currencyKey == securityCurrencyKey and r.norm == Credit).foldl(a +
         b.amount, newDecimal("0.00"))
     let securityAbsDelta = (securityDebitAmount - securityCreditAmount).abs
 
-    if (securityAbsDelta / referenceAbsDelta).quantize(newDecimal("0.00")) == conversionRate:
+    if (securityAbsDelta / referenceAbsDelta).quantize(conversionRate) == conversionRate:
       return R.ok
     else:
       echo referenceAbsDelta, " ", securityAbsDelta, " ", securityAbsDelta / referenceAbsDelta, " ", conversionRate
@@ -105,36 +105,34 @@ proc aggregateTransaction(accounts: Table[string, Account],
   if transaction.isMultiCurrency:
     let exchangeAccountKey = getExchangeAccountKey(transaction)
     let exchangeAccount = exchangeAccounts[exchangeAccountKey]
-    let (reference, security, _) = extractConversionDetails(transaction)
+    let (referenceCurrencyKey, securityCurrencyKey, _) = extractConversionDetails(transaction)
 
     let referenceDebitAmount = transaction.records.filter(r =>
-        r.currency.string == reference.string and r.norm == Debit).foldl(a +
+        r.currencyKey == referenceCurrencyKey and r.norm == Debit).foldl(a +
         b.amount, newDecimal("0.00"))
     let referenceCreditAmount = transaction.records.filter(r =>
-        r.currency.string == reference.string and r.norm == Credit).foldl(a +
+        r.currencyKey == referenceCurrencyKey and r.norm == Credit).foldl(a +
         b.amount, newDecimal("0.00"))
     let referenceDelta = referenceDebitAmount - referenceCreditAmount
 
     let securityDebitAmount = transaction.records.filter(r =>
-        r.currency.string == security.string and r.norm == Debit).foldl(a +
+        r.currencyKey == securityCurrencyKey and r.norm == Debit).foldl(a +
         b.amount, newDecimal("0.00"))
     let securityCreditAmount = transaction.records.filter(r =>
-        r.currency.string == security.string and r.norm == Credit).foldl(a +
+        r.currencyKey == securityCurrencyKey and r.norm == Credit).foldl(a +
         b.amount, newDecimal("0.00"))
     let securityDelta = securityDebitAmount - securityCreditAmount
 
     exchangeAccount.referenceBalance += referenceDelta
     exchangeAccount.securityBalance += securityDelta
 
-proc aggregateTransactions*(currencies: OrderedSet[string], accounts: Table[string, Account],
+proc aggregateTransactions*(currencies: Table[string, Currency], accounts: Table[string, Account],
     exchangeAccounts: Table[string, ExchangeAccount], transactions: seq[
     Transaction]): Ledger =
-  var accounts = accounts
-  var transactions = transactions
 
   for transaction in transactions:
     aggregateTransaction(accounts, exchangeAccounts, transaction)
 
-  return (currencies: currencies, accounts: accounts, exchangeAccounts: exchangeAccounts,
+  return Ledger(currencies: currencies, accounts: accounts, exchangeAccounts: exchangeAccounts,
       transactions: transactions)
 

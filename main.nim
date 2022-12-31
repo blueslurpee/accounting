@@ -1,4 +1,4 @@
-import std/[times, sets]
+import std/[times]
 import tables
 
 import results
@@ -11,7 +11,7 @@ import report
 const filename = "./journal/test.txt"
 
 var buffer: Buffer = Buffer(
-    currencies: initOrderedSet[string](),
+    currencies: initTable[string, Currency](),
     accounts: initTable[string, OptionalAccount](), 
     exchangeAccounts: initTable[string, ExchangeAccount](),
     transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,

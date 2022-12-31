@@ -50,11 +50,11 @@ proc accountKindToNorm(accountKind: AccountKind): Norm =
     result = Credit
 
 
-proc parseAccount(key: string, currencyString: string): OptionalAccount =
+proc parseAccount(key: string, currencyKey: string): OptionalAccount =
   let elements = key.split(":")
   let kind = parseAccountKind(elements[0])
 
-  return (key: currencyString & ":" & key, kind: kind, norm: accountKindToNorm(kind), currency: Currency(currencyString), open: none(
+  return OptionalAccount(key: currencyKey & ":" & key, kind: kind, norm: accountKindToNorm(kind), currencyKey: currencyKey, open: none(
       DateTime), close: none(DateTime))
 
 proc parseNorm(norm: string): Norm =
@@ -68,18 +68,24 @@ proc parseNorm(norm: string): Norm =
 
 proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   var buffer = buffer
+  var currencyIndex = 0
 
   let parser = peg("input", buffer: Buffer):
     input <- *Space * *( > decl * *Space)
-    decl <- exchangeDecl | openDecl | closeDecl | balanceDecl | padDecl |
+    decl <- currencyDecl | exchangeDecl | openDecl | closeDecl | balanceDecl | padDecl |
         noteDecl | priceDecl | transactionDecl
+
+    currencyDecl <- "currency" * +Blank * >currency * *Blank * ?"\n":
+      let currency = Currency(key: $1, index: currencyIndex)
+      buffer.currencies[currency.key] = currency
+      currencyIndex += 1
 
     exchangeDecl <- "exchange-pair" * +Blank * >currency * ":" * >currency *
         *Blank * ?"\n":
       let accountKey = $1 & ":" & $2
       if accountKey in buffer.exchangeAccounts:
         raise newException(ParseError, "Cannot define multiple identical exchange accounts")
-      buffer.exchangeAccounts[accountKey] = (key: accountKey,
+      buffer.exchangeAccounts[accountKey] = ExchangeAccount(key: accountKey,
           kind: AccountKind.Exchange, norm: Norm.Credit,
           referenceBalance: newDecimal("0.00"), securityBalance: newDecimal("0.00"))
 
@@ -93,8 +99,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         else:
           buffer.accounts[account.key].open = some(date)
       else:
-        buffer.accounts[account.key] = (key: account.key, kind: account.kind,
-            norm: account.norm, currency: account.currency, open: some(date), close: none(DateTime))
+        buffer.accounts[account.key] = OptionalAccount(key: account.key, kind: account.kind,
+            norm: account.norm, currencyKey: account.currencyKey, open: some(date), close: none(DateTime))
 
     closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
@@ -106,8 +112,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         else:
           buffer.accounts[account.key].close = some(date)
       else:
-        buffer.accounts[account.key] = (key: account.key, kind: account.kind,
-            norm: account.norm, currency: account.currency, open: none(DateTime), close: some(date))
+        buffer.accounts[account.key] = OptionalAccount(key: account.key, kind: account.kind,
+            norm: account.norm, currencyKey: account.currencyKey, open: none(DateTime), close: some(date))
 
     balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank *
         amount * +Blank * currency * *Blank * ?"\n"
@@ -133,26 +139,23 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         buffer.transactions.lastDate = date
 
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
-        >currency * *Blank * ?("@" * *Blank * >amount * *Blank * >currency) * ?"\n":
+        >currency * *Blank * ?("@" * *Blank * >rate * *Blank * >currency) * ?"\n":
       let conversionRate = (if capture.len == 7: some(newDecimal(
           $5)) else: none(DecimalType))
-      let conversionTarget = (if capture.len == 7: some(Currency(
-          $6)) else: none(Currency))
+      let conversionTarget = (if capture.len == 7: some($6) else: none(string))
 
-      let currencyString = $4
-      let accountKey = currencyString & ":" & $1
-      
-      buffer.currencies.incl(currencyString)
+      let currencyKey = $4
+      let accountKey = currencyKey & ":" & $1
 
       if buffer.transactions.newEntry:
         buffer.transactions.records.add(@[Record(accountKey: accountKey,
-            norm: parseNorm($2), amount: newDecimal($3), currency: Currency(currencyString),
+            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey,
                 conversionTarget: conversionTarget,
                 conversionRate: conversionRate)])
         buffer.transactions.newEntry = false
       else:
         buffer.transactions.records[^1].add(Record(accountKey: accountKey,
-            norm: parseNorm($2), amount: newDecimal($3), currency: Currency(currencyString),
+            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey,
                 conversionTarget: conversionTarget,
                 conversionRate: conversionRate))
 
@@ -165,6 +168,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
     exchangeRate <- "@" * *Blank * +Digit * "." * +Digit
     amount <- +Digit * "." * Digit[2]
+    rate <- +Digit * "." * Digit[1..5]
     norm <- "D" | "C"
     currency <- +Alnum
     date <- Digit[4] * "-" * Digit[2] * "-" * Digit[2]
@@ -190,12 +194,12 @@ proc transferBufferToLedger*(buffer: Buffer): Ledger =
     let concreteOpen = open.get
     let concreteClose = if close.isSome: close.get else: buffer.transactions.lastDate
 
-    result.accounts[key] = (key: account.key, kind: account.kind,
-        norm: account.norm, currency: account.currency, open: concreteOpen, close: concreteClose,
+    result.accounts[key] = Account(key: account.key, kind: account.kind,
+        norm: account.norm, currencyKey: account.currencyKey, open: concreteOpen, close: concreteClose,
         balance: newDecimal("0.00"))
 
   for key in buffer.exchangeAccounts.keys:
-    result.exchangeAccounts[key] = (key: key, kind: AccountKind.Exchange,
+    result.exchangeAccounts[key] = ExchangeAccount(key: key, kind: AccountKind.Exchange,
         norm: Norm.Credit, referenceBalance: newDecimal("0.00"),
         securityBalance: newDecimal("0.00"))
 

@@ -1,4 +1,4 @@
-import std/[times, options, sets]
+import std/[times, options]
 import tables
 import decimal/decimal
 import results
@@ -9,7 +9,9 @@ type ParseError* = object of ValueError
 type LogicError* = object of ValueError
 
 type
-  Currency* = distinct string
+  Currency* = object
+    key*: string
+    index*: int
   Norm* = enum
     Debit
     Credit
@@ -33,27 +35,27 @@ type
       succ*: AccountNode
     of Leaf:
       discard
-  OptionalAccount* = tuple
-    key: string
-    kind: AccountKind
-    norm: Norm
-    currency: Currency
-    open: Option[DateTime]
-    close: Option[DateTime]
-  Account* = tuple
-    key: string
-    kind: AccountKind
-    norm: Norm
-    currency: Currency
-    open: DateTime
-    close: DateTime
-    balance: DecimalType
-  ExchangeAccount* = tuple
-    key: string
-    kind: AccountKind
-    norm: Norm
-    referenceBalance: DecimalType
-    securityBalance: DecimalType
+  OptionalAccount* = object
+    key*: string
+    kind*: AccountKind
+    norm*: Norm
+    currencyKey*: string
+    open*: Option[DateTime]
+    close*: Option[DateTime]
+  Account* = object
+    key*: string
+    kind*: AccountKind
+    norm*: Norm
+    currencyKey*: string
+    open*: DateTime
+    close*: DateTime
+    balance*: DecimalType
+  ExchangeAccount* = object
+    key*: string
+    kind*: AccountKind
+    norm*: Norm
+    referenceBalance*: DecimalType
+    securityBalance*: DecimalType
 
 type
   Transaction* = object
@@ -66,8 +68,8 @@ type
     accountKey*: string
     norm*: Norm
     amount*: DecimalType
-    currency*: Currency
-    conversionTarget*: Option[Currency]
+    currencyKey*: string
+    conversionTarget*: Option[string]
     conversionRate*: Option[DecimalType]
   Verifier* = proc(transaction: Transaction): R
 
@@ -83,16 +85,16 @@ type
     notes*: seq[string]
     records*: seq[seq[Record]]
   Buffer* = object
-    currencies*: OrderedSet[string]
+    currencies*: Table[string, Currency]
     accounts*: AccountBuffer
     exchangeAccounts*: ExchangeAccountBuffer
     transactions*: TransactionBuffer
 
-type Ledger* = tuple
-  currencies: OrderedSet[string]
-  accounts: Table[string, Account]
-  exchangeAccounts: Table[string, ExchangeAccount]
-  transactions: seq[Transaction]
+type Ledger* = object
+  currencies*: Table[string, Currency]
+  accounts*: Table[string, Account]
+  exchangeAccounts*: Table[string, ExchangeAccount]
+  transactions*: seq[Transaction]
 
 
 proc key*(account: AccountNode): string =

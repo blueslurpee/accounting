@@ -1,11 +1,25 @@
+currency USD
+currency EUR
+currency CHF
+
 exchange-pair USD:CHF
+exchange-pair USD:EUR
+exchange-pair EUR:CHF
 
 2022-01-01 open Assets:Cash USD
+2022-01-01 open Assets:Cash EUR
 2022-01-01 open Assets:Cash CHF
+2022-01-01 open Assets:AccountsReceivable CHF
 
+2022-01-01 open Revenue:Operations USD
+2022-01-01 open Revenue:Operations EUR
 2022-01-01 open Revenue:Operations CHF
 2022-01-01 open Expenses:Transport CHF
 
+
+2022-01-01 * "Test"
+  Assets:Cash           D 7000.00 USD @ 1.14286 CHF
+  Revenue:Operations    C 8000.00 CHF
 
 2022-01-25 * "January Revenue"
   Assets:Cash           D 8000.00 CHF
