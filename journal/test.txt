@@ -11,18 +11,22 @@ exchange-pair EUR:CHF
 2022-01-01 open Asset:Cash CHF
 2022-01-01 open Asset:AccountsReceivable CHF
 
+2022-01-01 open Liability:TaxEstimate USD
+
 2022-01-01 open Revenue:Operations USD
 2022-01-01 open Revenue:Operations EUR
 2022-01-01 open Revenue:Operations CHF
+
+2022-01-01 open Expense:IncomeTax USD
 2022-01-01 open Expense:Transport CHF
 
 
 2022-01-01 * "Test"
-  Asset:Cash           D 7000.00 USD @ 1.14286 CHF
+  Asset:Cash            D 7000.00 USD @ 1.14286 CHF
   Revenue:Operations    C 8000.00 CHF
 
 2022-01-25 * "January Revenue"
-  Asset:Cash           D 8000.00 CHF
+  Asset:Cash            D 8000.00 CHF
   Revenue:Operations    C 8000.00 CHF
 
 2022-01-27 * "GA January"
