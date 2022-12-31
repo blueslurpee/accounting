@@ -4,9 +4,8 @@ import tables
 
 import types
 
-proc sortOnCurrency(x, y: Account): int =
-  if x.currencyKey >= y.currencyKey : 1
-  else: -1
+proc sortOnIndex(a, b: Currency):int = 
+  (if a.index >= b.index: 1 else: -1)
 
 proc toBalanceString(account: Account): string =
   return (if account.balance >= 0: $account.balance else: "(" &
@@ -46,26 +45,32 @@ proc printBalanceSheet(currencies: Table[string, Currency], accounts: seq[Accoun
   echo endGap, nameHeader, namePadding, midGap, balanceHeader, balancePadding, endGap
 
   echo ""
-  echo spaces(2) & "Assets" & "\n"
-  for account in accounts.filter(a => a.kind == AccountKind.Asset).sorted(sortOnCurrency):
-    let namePadLength = maxLengthName - account.key.len
-    let balancePadLength = maxLengthBalance - account.toBalanceString.len
-    echo "| ", &"{account.key}", spaces(namePadLength), " | ", spaces(3 +
-        balancePadLength), account.toBalanceString, " |"
-  
+  echo spaces(2) & "Assets" & "\n"  
+  for value in currencies.values.toSeq.sorted(sortOnIndex):
+    let currencyKey = value.key
+
+    for account in accounts.filter(a => a.kind == AccountKind.Asset and a.currencyKey == currencyKey):
+      let namePadLength = maxLengthName - account.key.len
+      let balancePadLength = maxLengthBalance - account.toBalanceString.len
+      echo "| ", &"{account.key}", spaces(namePadLength), " | ", spaces(3 +
+          balancePadLength), account.toBalanceString, " |"
+    
   echo ""
-  echo spaces(2) & "Liabilities" & "\n"
-  for account in accounts.filter(a => a.kind == AccountKind.Liability).sorted(sortOnCurrency):
-    let namePadLength = maxLengthName - account.key.len
-    let balancePadLength = maxLengthBalance - account.toBalanceString.len
-    echo "| ", &"{account.key}", spaces(namePadLength), " | ", spaces(3 +
-        balancePadLength), account.toBalanceString, " |"
+  echo spaces(2) & "Liabilities" & "\n"  
+  for value in currencies.values.toSeq.sorted(sortOnIndex):
+    let currencyKey = value.key
+
+    for account in accounts.filter(a => a.kind == AccountKind.Liability and a.currencyKey == currencyKey):
+      let namePadLength = maxLengthName - account.key.len
+      let balancePadLength = maxLengthBalance - account.toBalanceString.len
+      echo "| ", &"{account.key}", spaces(namePadLength), " | ", spaces(3 +
+          balancePadLength), account.toBalanceString, " |"
 
 
   echo ""
   echo spaces(2) & "Equity" & "\n"
-  for key in currencies.keys:
-    let currencyKey = currencies[key].key
+  for value in currencies.values.toSeq.sorted(sortOnIndex):
+    let currencyKey = value.key
     let currencyAssets = accounts.filter(a => a.kind == AccountKind.Asset and
         a.currencyKey == currencyKey).foldl(a + b.balance, newDecimal("0.00"))
     let currencyLiabilities = accounts.filter(a => a.kind ==
@@ -93,15 +98,10 @@ proc printBalanceSheet(currencies: Table[string, Currency], accounts: seq[Accoun
 proc printIncomeStatement(currencies: Table[string, Currency], accounts: seq[
     Account], exchangeAccounts: seq[ExchangeAccount]): void =
   let maxLengthName = currencies.keys.toSeq.map(x => x.len).foldl(if b > a: b else: a)
-  let maxLengthRevenue = currencies.keys.toSeq.map(x => accounts.filter(a =>
-      a.currencyKey == x and a.kind == AccountKind.Revenue).map(a =>
-      a.toBalanceString.len).foldl(if b > a: b else: a, 0)).foldl(if b > a: b else: a)
-  let maxLengthExpense = currencies.keys.toSeq.map(x => accounts.filter(a =>
-      a.currencyKey == x and a.kind == AccountKind.Expense).map(a =>
-      a.toBalanceString.len).foldl(if b > a: b else: a, 0)).foldl(if b > a: b else: a)
+  let maxLengthRevenue = accounts.map(a => a.toBalanceString.len).foldl(if b > a: b else: a, 0)
+  let maxLengthExpense = accounts.map(a => a.toBalanceString.len).foldl(if b > a: b else: a, 0)
   let maxLengthNetIncome = currencies.keys.toSeq.map(x => accounts.filter(a =>
-      a.currencyKey == x and (a.kind == AccountKind.Revenue or a.kind == AccountKind.Expense)).map(a =>
-      a.balance).foldl(if b >= 0: a + b else: a - b, newDecimal("0.00"))).map(decimal => 
+      (a.kind == AccountKind.Revenue or a.kind == AccountKind.Expense) and a.currencyKey == x).map(a => (if a.kind == AccountKind.Revenue: a.balance else: -1 * a.balance)).foldl(a + b, newDecimal("0.00"))).map(decimal => 
       decimal.toAccountingString.len).foldl(if b > a: b else: a)
 
   let endGap = spaces(2)

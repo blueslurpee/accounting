@@ -8,17 +8,17 @@ import types
 
 proc parseAccountKind(accountKind: string): AccountKind =
   case accountKind
-  of "Assets":
+  of "Asset":
     return Asset
-  of "Liabilities":
+  of "Liability":
     return Liability
   of "Equity":
     return Equity
   of "Revenue":
     return Revenue
-  of "Expenses":
+  of "Expense":
     return Expense
-  of "Draws":
+  of "Draw":
     return Draw
   else:
     raise newException(ValueError, "Invalid Account Type")
@@ -160,8 +160,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
                 conversionRate: conversionRate))
 
     account <- accountKind * ":" * accountTree
-    accountKind <- "Assets" | "Liabilities" | "Equity" | "Revenue" |
-        "Expenses" | "Draws"
+    accountKind <- "Asset" | "Liability" | "Equity" | "Revenue" |
+        "Expense" | "Draw"
     accountTree <- *accountParent * accountLeaf
     accountParent <- +Alnum * ":"
     accountLeaf <- +Alnum
