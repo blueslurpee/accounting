@@ -72,8 +72,10 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
   let parser = peg("input", buffer: Buffer):
     input <- *Space * *( > decl * *Space)
-    decl <- currencyDecl | exchangeDecl | openDecl | closeDecl | balanceDecl | padDecl |
+    decl <- comment | currencyDecl | exchangeDecl | openDecl | closeDecl | balanceDecl | padDecl |
         noteDecl | priceDecl | transactionDecl
+      
+    comment <- "#" * *(1 - "\n") * "\n"
 
     currencyDecl <- "currency" * +Blank * >currency * *Blank * ?"\n":
       let currency = Currency(key: $1, index: currencyIndex)

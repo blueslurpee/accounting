@@ -1,4 +1,4 @@
-import std/[times]
+import std/[os, times, parseopt]
 import tables
 
 import results
@@ -8,21 +8,41 @@ import parse
 import core
 import report
 
-const filename = "./journal/test_2.txt"
+proc writeHelp() = echo "Help Command"
+proc writeVersion() = echo "0.0.1"
 
-var buffer: Buffer = Buffer(
-    currencies: initTable[string, Currency](),
-    accounts: initTable[string, OptionalAccount](), 
-    exchangeAccounts: initTable[string, ExchangeAccount](),
-    transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,
-    00, 00, utc())))
+# const filename = "./journal/test_2.txt"
+var filename: string = ""
+var p = initOptParser(os.commandLineParams())
 
-var ledger = transferBufferToLedger(parseFileIntoBuffer(filename, buffer))
-let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
+for kind, key, val in p.getopt():
+  case kind
+  of cmdArgument:
+    filename = key
+  of cmdLongOption, cmdShortOption:
+    case key
+    of "help", "h": writeHelp()
+    of "version", "v": writeVersion()
+  of cmdEnd: assert(false) # cannot happen
 
-if (checkTransactions.isOk):
-  ledger = aggregateTransactions(ledger.currencies, ledger.accounts, ledger.exchangeAccounts, ledger.transactions)
-  reportLedger(ledger)
+if filename == "":
+  writeHelp()
 else:
-  echo checkTransactions.error
+  echo "FILE ", filename 
+
+  var buffer: Buffer = Buffer(
+      currencies: initTable[string, Currency](),
+      accounts: initTable[string, OptionalAccount](), 
+      exchangeAccounts: initTable[string, ExchangeAccount](),
+      transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,
+      00, 00, utc())))
+
+  var ledger = transferBufferToLedger(parseFileIntoBuffer(filename, buffer))
+  let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
+
+  if (checkTransactions.isOk):
+    ledger = aggregateTransactions(ledger.currencies, ledger.accounts, ledger.exchangeAccounts, ledger.transactions)
+    reportLedger(ledger)
+  else:
+    echo checkTransactions.error
 

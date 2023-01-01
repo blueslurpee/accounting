@@ -52,6 +52,7 @@ let verifyEqualDebitsAndCredits*: Verifier = proc(transaction: Transaction): R =
     if debitAmount == creditAmount:
       return R.ok
     else:
+      echo "TRANSACTION ", transaction.date, " " , transaction.payee
       return R.err "Debits and Credits must sum to 0"
   else:
     let (referenceCurrencyKey, securityCurrencyKey, conversionRate) = extractConversionDetails(transaction)

@@ -149,8 +149,6 @@ proc printTransactionJournal(transactions: seq[Transaction]) =
   echo "\t--- TRANSACTION JOURNAL ---\n"
 
   for transaction in transactions:
-    echo spaces(1), &"TRANSACTION {transaction.index + 1}"
-
     echo spaces(1), &"Date: {transaction.date.getDateStr}"
     echo spaces(1), &"Payee: {transaction.payee}"
     echo spaces(1), &"Note: {transaction.note}"
