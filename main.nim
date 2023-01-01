@@ -8,7 +8,7 @@ import parse
 import core
 import report
 
-const filename = "./journal/test.txt"
+const filename = "./journal/test_2.txt"
 
 var buffer: Buffer = Buffer(
     currencies: initTable[string, Currency](),

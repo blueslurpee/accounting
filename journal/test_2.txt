@@ -23,21 +23,7 @@ exchange-pair EUR:CHF
 2022-01-01 open Expense:Transport CHF
 
 
-2022-01-01 * "Test"
-  Asset:Cash            D 7000.00 USD @ 1.14286 CHF
-  Liability:TaxEstimate C 3000.00 CHF
-  Expense:IncomeTax     D 3000.00 CHF
-  Revenue:Operations    C 8000.00 CHF
-
 2022-01-02 * "Dividend Test"
   Asset:Cash                    D 50.00 USD
   Revenue:Dividends             C 100.00 USD
   Expense:DividendArrangements  D 50.00 USD
-
-2022-01-25 * "January Revenue"
-  Asset:Cash            D 8000.00 CHF
-  Revenue:Operations    C 8000.00 CHF
-
-2022-01-27 * "GA January"
-  Asset:Cash           C 365.59 USD @ 0.93 CHF
-  Expense:Transport    D 340.00 CHF
