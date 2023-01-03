@@ -18,8 +18,6 @@ proc parseAccountKind(accountKind: string): AccountKind =
     return Revenue
   of "Expense":
     return Expense
-  of "Draw":
-    return Draw
   else:
     raise newException(ValueError, "Invalid Account Type")
 
@@ -43,8 +41,6 @@ proc accountKindToNorm(accountKind: AccountKind): Norm =
   of Revenue:
     result = Credit
   of Expense:
-    result = Debit
-  of Draw:
     result = Debit
   of Exchange:
     result = Credit
@@ -148,15 +144,16 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
       let currencyKey = $4
       let accountKey = currencyKey & ":" & $1
+      let accountKind = parseAccountKind(($1).split(":")[0])
 
       if buffer.transactions.newEntry:
-        buffer.transactions.records.add(@[Record(accountKey: accountKey,
+        buffer.transactions.records.add(@[Record(accountKey: accountKey, kind: accountKind, 
             norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey,
                 conversionTarget: conversionTarget,
                 conversionRate: conversionRate)])
         buffer.transactions.newEntry = false
       else:
-        buffer.transactions.records[^1].add(Record(accountKey: accountKey,
+        buffer.transactions.records[^1].add(Record(accountKey: accountKey, kind: accountKind,
             norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey,
                 conversionTarget: conversionTarget,
                 conversionRate: conversionRate))

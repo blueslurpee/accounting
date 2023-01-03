@@ -6,29 +6,54 @@ import results
 
 import types
 
+proc reverse*(str: string): string =
+  result = ""
+  for index in countdown(str.high, 0):
+    result.add(str[index])
 
 proc isMultiCurrency(transaction: Transaction): bool =
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
   result = currencies.len == 2
 
-
-proc getExchangeAccountKey(transaction: Transaction): string =
+proc extractCurrencies(transaction: Transaction): tuple[
+    referenceCurrencyKey: string, securityCurrencyKey: string] =
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
-  result = currencies[0] & ":" & currencies[1]
+
+  if currencies.len != 2:
+    # Change to Result Type
+    raise newException(LogicError, "More than 2 currencies not supported")
+
+  return (currencies[0], currencies[1])
+
+proc getConversionRate(transaction: Transaction, referenceCurrencyKey: string,
+    securityCurrencyKey: string): DecimalType =
+  let forwardKey = referenceCurrencyKey & ":" & securityCurrencyKey
+  if forwardKey in transaction.conversionRates:
+    return transaction.conversionRates[forwardKey]
+
+  let reverseKey = forwardKey.reverse
+  if reverseKey in transaction.conversionRates:
+    return transaction.conversionRates[reverseKey] / 1
+
+  # Change to Result Type
+  raise newException(LogicError, "Conversion Rate Not Provided")
+
+proc getExchangeAccount(exchangeAccounts: Table[string, ExchangeAccount],
+    referenceCurrencyKey: string, securityCurrencyKey: string): tuple[
+    exchangeAccount: ExchangeAccount, flipped: bool] =
+  let forwardKey = referenceCurrencyKey & ":" & securityCurrencyKey
+  if forwardKey in exchangeAccounts:
+    return (exchangeAccounts[forwardKey], false)
+
+  let reverseKey = forwardKey.reverse
+  if reverseKey in exchangeAccounts:
+    return (exchangeAccounts[reverseKey], true)
+
+  # Change to Result Type
+  raise newException(LogicError, "Conversion Rate Not Provided")
 
 
-proc extractConversionDetails(transaction: Transaction): tuple[
-    referenceCurrencyKey: string, securityCurrencyKey: string, conversionRate: DecimalType] =
-  let definingRecord: Record = transaction.records.filter(r =>
-      r.conversionTarget.isSome and r.conversionRate.isSome)[0]
-  result = (definingRecord.currencyKey, definingRecord.conversionTarget.get(),
-      definingRecord.conversionRate.get())
-
-
-# let verifyRecordAccountsExist
-
-
-let verifyMultiCurrencyValidCurrencies*: Verifier = proc(
+let verifyMultiCurrencyValidCurrencies * : Verifier = proc(
     transaction: Transaction): R =
   if not transaction.isMultiCurrency:
     return R.ok
@@ -52,10 +77,11 @@ let verifyEqualDebitsAndCredits*: Verifier = proc(transaction: Transaction): R =
     if debitAmount == creditAmount:
       return R.ok
     else:
-      echo "TRANSACTION ", transaction.date, " " , transaction.payee
+      echo "TRANSACTION ", transaction.date, " ", transaction.payee
       return R.err "Debits and Credits must sum to 0"
   else:
-    let (referenceCurrencyKey, securityCurrencyKey, conversionRate) = extractConversionDetails(transaction)
+    let (referenceCurrencyKey, securityCurrencyKey) = extractCurrencies(transaction)
+    let conversionRate = getConversionRate(transaction, referenceCurrencyKey, securityCurrencyKey)
 
     let referenceDebitAmount = transaction.records.filter(r =>
         r.currencyKey == referenceCurrencyKey and r.norm == Debit).foldl(a +
@@ -76,7 +102,8 @@ let verifyEqualDebitsAndCredits*: Verifier = proc(transaction: Transaction): R =
     if (securityAbsDelta / referenceAbsDelta).quantize(conversionRate) == conversionRate:
       return R.ok
     else:
-      echo referenceAbsDelta, " ", securityAbsDelta, " ", securityAbsDelta / referenceAbsDelta, " ", conversionRate
+      echo referenceAbsDelta, " ", securityAbsDelta, " ", securityAbsDelta /
+          referenceAbsDelta, " ", conversionRate
       return R.err "Transaction amounts do not conform with provided conversion rate"
 
 
@@ -92,11 +119,26 @@ proc verifyTransactions*(transactions: seq[Transaction], verifiers: seq[Verifier
           break verify
 
 
-proc aggregateTransaction(accounts: Table[string, Account],
-    exchangeAccounts: Table[string, ExchangeAccount],
-    transaction: Transaction): void =
+proc convertTransaction(l: Ledger, transaction: Transaction,
+    reportingCurrencyKey: string): Transaction =
   for record in transaction.records:
-    let account = accounts[record.accountKey]
+    if (record.kind == AccountKind.Revenue or record.kind ==
+        AccountKind.Expense) and record.currencyKey != reportingCurrencyKey:
+      echo "Got a hit", " ", record
+
+  # let exchangeAccountKey = getExchangeAccountKey(transaction)
+  # let exchangeAccount = l.exchangeAccounts[exchangeAccountKey]
+  # let (referenceCurrencyKey, securityCurrencyKey, _) = extractConversionDetails(transaction)
+
+
+  return transaction
+  # for record in transaction.records:
+  #   if record.
+
+
+proc aggregateTransaction(l: Ledger, transaction: Transaction): void =
+  for record in transaction.records:
+    let account = l.accounts[record.accountKey]
 
     if account.norm == record.norm:
       account.balance += record.amount
@@ -104,9 +146,10 @@ proc aggregateTransaction(accounts: Table[string, Account],
       account.balance -= record.amount
 
   if transaction.isMultiCurrency:
-    let exchangeAccountKey = getExchangeAccountKey(transaction)
-    let exchangeAccount = exchangeAccounts[exchangeAccountKey]
-    let (referenceCurrencyKey, securityCurrencyKey, _) = extractConversionDetails(transaction)
+    let (referenceCurrencyKey, securityCurrencyKey) = extractCurrencies(transaction)
+    # let conversionRate = getConversionRate(transaction, referenceCurrencyKey, securityCurrencyKey)
+    let (exchangeAccount, flipped) = getExchangeAccount(l.exchangeAccounts,
+        referenceCurrencyKey, securityCurrencyKey)
 
     let referenceDebitAmount = transaction.records.filter(r =>
         r.currencyKey == referenceCurrencyKey and r.norm == Debit).foldl(a +
@@ -124,16 +167,23 @@ proc aggregateTransaction(accounts: Table[string, Account],
         b.amount, newDecimal("0.00"))
     let securityDelta = securityDebitAmount - securityCreditAmount
 
-    exchangeAccount.referenceBalance += referenceDelta
-    exchangeAccount.securityBalance += securityDelta
+    if flipped:
+      echo "Flipped"
+      exchangeAccount.referenceBalance += securityDelta
+      exchangeAccount.securityBalance += referenceDelta
+    else:
+      exchangeAccount.referenceBalance += referenceDelta
+      exchangeAccount.securityBalance += securityDelta
 
-proc aggregateTransactions*(currencies: Table[string, Currency], accounts: Table[string, Account],
-    exchangeAccounts: Table[string, ExchangeAccount], transactions: seq[
-    Transaction]): Ledger =
+proc aggregateTransactions*(l: Ledger, reportingCurrencyKey: Option[
+    string]): Ledger =
+  if reportingCurrencyKey.isSome():
+    for transaction in l.transactions:
+      aggregateTransaction(l, convertTransaction(l, transaction,
+          reportingCurrencyKey.get()))
+  else:
+    for transaction in l.transactions:
+      aggregateTransaction(l, transaction)
 
-  for transaction in transactions:
-    aggregateTransaction(accounts, exchangeAccounts, transaction)
-
-  return Ledger(currencies: currencies, accounts: accounts, exchangeAccounts: exchangeAccounts,
-      transactions: transactions)
+  return l
 

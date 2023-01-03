@@ -18,13 +18,12 @@ type
 
 type
   AccountKind* = enum
-    Asset = "Assets"
-    Liability = "Liabilities"
-    Equity = "Equity"
-    Revenue = "Revenue"
-    Expense = "Expenses"
-    Draw = "Draws"
-    Exchange = "Exchange"
+    Asset = "ASSET"
+    Liability = "LIABILITY"
+    Equity = "EQUITY"
+    Revenue = "REVENUE"
+    Expense = "EXPENSE"
+    Exchange = "EXCHANGE"
   AccountNodeType* = enum
     Parent
     Leaf
@@ -63,14 +62,16 @@ type
     date*: DateTime
     payee*: string
     note*: string
+    conversionRates*: Table[string, DecimalType]
     records*: seq[Record]
   Record* = object
     accountKey*: string
+    kind*: AccountKind
     norm*: Norm
     amount*: DecimalType
     currencyKey*: string
-    conversionTarget*: Option[string]
-    conversionRate*: Option[DecimalType]
+    # conversionTarget*: Option[string]
+    # conversionRate*: Option[DecimalType]
   Verifier* = proc(transaction: Transaction): R
 
 type
@@ -83,6 +84,7 @@ type
     dates*: seq[DateTime]
     payees*: seq[string]
     notes*: seq[string]
+    conversionRates*: seq[Table[string, DecimalType]]
     records*: seq[seq[Record]]
   Buffer* = object
     currencies*: Table[string, Currency]

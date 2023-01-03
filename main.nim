@@ -1,4 +1,4 @@
-import std/[os, times, parseopt]
+import std/[os, times, parseopt, options]
 import tables
 
 import results
@@ -41,7 +41,7 @@ else:
   let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
 
   if (checkTransactions.isOk):
-    ledger = aggregateTransactions(ledger.currencies, ledger.accounts, ledger.exchangeAccounts, ledger.transactions)
+    ledger = aggregateTransactions(ledger, some("USD"))
     reportLedger(ledger)
   else:
     echo checkTransactions.error
