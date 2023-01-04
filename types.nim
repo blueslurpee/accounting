@@ -70,8 +70,6 @@ type
     norm*: Norm
     amount*: DecimalType
     currencyKey*: string
-    # conversionTarget*: Option[string]
-    # conversionRate*: Option[DecimalType]
   Verifier* = proc(transaction: Transaction): R
 
 type
@@ -88,6 +86,7 @@ type
     records*: seq[seq[Record]]
   Buffer* = object
     currencies*: Table[string, Currency]
+    conversionRatesBuffer*: Table[string, DecimalType]
     accounts*: AccountBuffer
     exchangeAccounts*: ExchangeAccountBuffer
     transactions*: TransactionBuffer

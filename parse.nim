@@ -121,17 +121,23 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         *Blank * ?"\n"
     priceDecl <- date * +Blank * "price" * +Blank * currency * +Blank * amount *
         +Blank * currency * *Blank * ?"\n"
-    transactionDecl <- transactionHeader * +record * ?"\n"
+    transactionDecl <- *exchangeRates * transactionHeader * +record * ?"\n"
+
+    exchangeRates <- "@" * >currency * ":" * >currency * *Blank * >rate * *Blank * "\n":
+      let currencyKey = $1 & ":" & $2
+      buffer.conversionRatesBuffer[currencyKey] = newDecimal($3)
 
     transactionHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank *
         >?note * *Blank * "\n":
       let date: DateTime = parse($1, "yyyy-MM-dd")
+      let transactionExchangeRates = buffer.conversionRatesBuffer
 
       buffer.transactions.newEntry = true
       buffer.transactions.index += 1
       buffer.transactions.dates.add(date)
       buffer.transactions.payees.add($2)
       buffer.transactions.notes.add($3)
+      buffer.transactions.conversionRates.add(transactionExchangeRates)
 
       if (date > buffer.transactions.lastDate):
         buffer.transactions.lastDate = date
@@ -148,15 +154,11 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
       if buffer.transactions.newEntry:
         buffer.transactions.records.add(@[Record(accountKey: accountKey, kind: accountKind, 
-            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey,
-                conversionTarget: conversionTarget,
-                conversionRate: conversionRate)])
+            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey)])
         buffer.transactions.newEntry = false
       else:
         buffer.transactions.records[^1].add(Record(accountKey: accountKey, kind: accountKind,
-            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey,
-                conversionTarget: conversionTarget,
-                conversionRate: conversionRate))
+            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey))
 
     account <- accountKind * ":" * accountTree
     accountKind <- "Asset" | "Liability" | "Equity" | "Revenue" |
@@ -206,6 +208,6 @@ proc transferBufferToLedger*(buffer: Buffer): Ledger =
   for i in 0 .. buffer.transactions.index - 1:
     let note = if buffer.transactions.notes[i] != "": buffer.transactions.notes[i] else: "n/a"
     let transaction = Transaction(index: i, date: buffer.transactions.dates[i],
-        payee: buffer.transactions.payees[i], note: note,
+        payee: buffer.transactions.payees[i], note: note, conversionRates: buffer.transactions.conversionRates[i],
         records: buffer.transactions.records[i])
     result.transactions.add(transaction)

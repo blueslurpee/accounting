@@ -2,6 +2,7 @@ import std/[os, times, parseopt, options]
 import tables
 
 import results
+import decimal/decimal # https://github.com/status-im/nim-decimal
 
 import types
 import parse
@@ -33,6 +34,7 @@ else:
   var buffer: Buffer = Buffer(
       currencies: initTable[string, Currency](),
       accounts: initTable[string, OptionalAccount](), 
+      conversionRatesBuffer: initTable[string, DecimalType](),
       exchangeAccounts: initTable[string, ExchangeAccount](),
       transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,
       00, 00, utc())))

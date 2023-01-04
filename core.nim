@@ -50,7 +50,7 @@ proc getExchangeAccount(exchangeAccounts: Table[string, ExchangeAccount],
     return (exchangeAccounts[reverseKey], true)
 
   # Change to Result Type
-  raise newException(LogicError, "Conversion Rate Not Provided")
+  raise newException(LogicError, "Could not find ExchangeAccount")
 
 
 let verifyMultiCurrencyValidCurrencies * : Verifier = proc(
@@ -121,14 +121,56 @@ proc verifyTransactions*(transactions: seq[Transaction], verifiers: seq[Verifier
 
 proc convertTransaction(l: Ledger, transaction: Transaction,
     reportingCurrencyKey: string): Transaction =
-  for record in transaction.records:
+  for i in 0..transaction.records.high:
+    var record = transaction.records[i]
     if (record.kind == AccountKind.Revenue or record.kind ==
         AccountKind.Expense) and record.currencyKey != reportingCurrencyKey:
-      echo "Got a hit", " ", record
+      let conversionRate = getConversionRate(transaction, record.currencyKey, reportingCurrencyKey)
+      let (exchangeAccount, flipped) = getExchangeAccount(l.exchangeAccounts, reportingCurrencyKey, record.currencyKey)
+      case record.kind:
+        of AccountKind.Revenue:
+          case record.norm:
+            of Norm.Credit:
+              if flipped:
+                echo ""
+              else:
+                # The transaction directions should be correct
+                # We made revenue in the security, therefore upon conversion we must increase the security balance as it represents an exposure
+                let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
+                exchangeAccount.securityBalance += record.amount
+                exchangeAccount.referenceBalance -= convertedAmount
+                record.amount = convertedAmount
+            of Norm.Debit:
+              if flipped:
+                echo ""
+              else:
+                let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
+                exchangeAccount.securityBalance -= record.amount
+                exchangeAccount.referenceBalance += convertedAmount
+                record.amount = convertedAmount
+        of AccountKind.Expense:
+          case record.norm:
+            of Norm.Credit:
+              if flipped:
+                echo ""
+              else:
+                let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
+                exchangeAccount.securityBalance += record.amount
+                exchangeAccount.referenceBalance -= convertedAmount
+                record.amount = convertedAmount
+            of Norm.Debit:
+              if flipped:
+                echo ""
+              else:
+                # The transaction directions should be correct
+                # We record and expense in the security, therefore upon conversion we must decrease the security balance, reducing exposure
+                let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
+                exchangeAccount.securityBalance -= record.amount
+                exchangeAccount.referenceBalance += convertedAmount
+                record.amount = convertedAmount
+        else:
+          echo ""
 
-  # let exchangeAccountKey = getExchangeAccountKey(transaction)
-  # let exchangeAccount = l.exchangeAccounts[exchangeAccountKey]
-  # let (referenceCurrencyKey, securityCurrencyKey, _) = extractConversionDetails(transaction)
 
 
   return transaction
