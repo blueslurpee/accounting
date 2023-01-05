@@ -31,7 +31,7 @@ proc getConversionRate(transaction: Transaction, referenceCurrencyKey: string,
     return 1 / transaction.conversionRates[reverseKey]
 
   # Change to Result Type
-  raise newException(LogicError, "Conversion Rate Not Provided")
+  raise newException(LogicError, "Conversion Rate Not Provided for " & transaction.payee)
 
 proc getExchangeAccount(exchangeAccounts: Table[string, ExchangeAccount],
     referenceCurrencyKey: string, securityCurrencyKey: string): tuple[

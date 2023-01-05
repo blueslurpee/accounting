@@ -139,6 +139,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
       buffer.transactions.notes.add($3)
       buffer.transactions.conversionRates.add(transactionExchangeRates)
 
+      buffer.conversionRatesBuffer = initTable[string, DecimalType]()
+
       if (date > buffer.transactions.lastDate):
         buffer.transactions.lastDate = date
 
@@ -203,7 +205,6 @@ proc transferBufferToLedger*(buffer: Buffer): Ledger =
     result.exchangeAccounts[key] = ExchangeAccount(key: key, kind: AccountKind.Exchange,
         norm: Norm.Credit, referenceBalance: newDecimal("0.00"),
         securityBalance: newDecimal("0.00"))
-
 
   for i in 0 .. buffer.transactions.index - 1:
     let note = if buffer.transactions.notes[i] != "": buffer.transactions.notes[i] else: "n/a"
