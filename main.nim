@@ -14,14 +14,17 @@ proc writeVersion() = echo "0.0.1"
 
 # const filename = "./journal/test_2.txt"
 var filename: string = ""
+var reportingCurrencyKey = none(string)
 var p = initOptParser(os.commandLineParams())
 
-for kind, key, val in p.getopt():
+for kind, key, value in p.getopt():
   case kind
   of cmdArgument:
     filename = key
   of cmdLongOption, cmdShortOption:
     case key
+    of "report", "r":
+      reportingCurrencyKey = some(value)
     of "help", "h": writeHelp()
     of "version", "v": writeVersion()
   of cmdEnd: assert(false) # cannot happen
@@ -29,8 +32,6 @@ for kind, key, val in p.getopt():
 if filename == "":
   writeHelp()
 else:
-  echo "FILE ", filename 
-
   var buffer: Buffer = Buffer(
       currencies: initTable[string, Currency](),
       accounts: initTable[string, OptionalAccount](), 
@@ -43,7 +44,7 @@ else:
   let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
 
   if (checkTransactions.isOk):
-    ledger = aggregateTransactions(ledger, some("USD"))
+    ledger = aggregateTransactions(ledger, reportingCurrencyKey)
     reportLedger(ledger)
   else:
     echo checkTransactions.error
