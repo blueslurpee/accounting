@@ -1,4 +1,4 @@
-import std/[sequtils, sugar, strutils, strformat, times, algorithm]
+import std/[sequtils, sugar, strutils, strformat, algorithm, times]
 import decimal/decimal
 import tables
 
@@ -6,6 +6,16 @@ import types
 
 proc sortOnIndex(a, b: Currency):int = 
   (if a.index >= b.index: 1 else: -1)
+
+proc toRateStringSequence(rates: seq[string]): string = 
+  result = "["
+  for i in 0..rates.high:
+    let s = rates[i]
+    if i == 0:
+      result = result & s & ","
+    else:
+      result = " " & result & s
+  result = result & "]"
 
 proc toBalanceString(account: Account): string =
   return (if account.balance >= 0: $account.balance else: "(" &
@@ -20,7 +30,6 @@ proc toBalanceString(account: ExchangeAccount): string =
 
 proc toAccountingString(decimal: DecimalType): string =
   return (if decimal >= 0: $decimal else: "(" & $decimal.abs & ")")
-
 
 proc printBalanceSheet(currencies: Table[string, Currency], accounts: seq[Account],
     exchangeAccounts: seq[ExchangeAccount]): void =
@@ -149,6 +158,10 @@ proc printTransactionJournal(transactions: seq[Transaction]) =
   echo "\t--- TRANSACTION JOURNAL ---\n"
 
   for transaction in transactions:
+    let transactionConversionRates = collect:
+      for key, value in transaction.conversionRates.pairs: &"{key} -> {value}"
+
+    echo spaces(1), &"Conversion Rates: {transactionConversionRates.toRateStringSequence}"
     echo spaces(1), &"Date: {transaction.date.getDateStr}"
     echo spaces(1), &"Payee: {transaction.payee}"
     echo spaces(1), &"Note: {transaction.note}"
