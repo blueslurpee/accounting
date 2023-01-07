@@ -50,7 +50,7 @@ proc parseAccount(key: string, currencyKey: string): OptionalAccount =
   let elements = key.split(":")
   let kind = parseAccountKind(elements[0])
 
-  return OptionalAccount(key: currencyKey & ":" & key, kind: kind, norm: accountKindToNorm(kind), currencyKey: currencyKey, open: none(
+  return OptionalAccount(key: key & ":" & currencyKey, kind: kind, norm: accountKindToNorm(kind), currencyKey: currencyKey, open: none(
       DateTime), close: none(DateTime))
 
 proc parseNorm(norm: string): Norm =
@@ -151,7 +151,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
       let conversionTarget = (if capture.len == 7: some($6) else: none(string))
 
       let currencyKey = $4
-      let accountKey = currencyKey & ":" & $1
+      let accountKey = $1 & ":" & currencyKey
       let accountKind = parseAccountKind(($1).split(":")[0])
 
       if buffer.transactions.newEntry:

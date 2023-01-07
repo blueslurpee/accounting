@@ -4,8 +4,22 @@ import tables
 
 import types
 
-proc sortOnIndex(a, b: Currency):int = 
+proc toSimpleName(a: Account): string
+
+proc sortOnIndex(a, b: Currency): int = 
   (if a.index >= b.index: 1 else: -1)
+
+proc sortOnSimpleName(a, b: Account): int = 
+  (if a.toSimpleName >= b.toSimpleName: 1 else: -1)
+
+proc toSimpleName(a: Account): string = 
+  let components = a.key.split(":")
+  for i in 0..components.high:
+    if i != 0 and i != components.high:
+      if i == 1:
+        result = result & components[i]
+      else:
+        result = result & ":" & components[i]
 
 proc toRateStringSequence(rates: seq[string]): string = 
   result = "["
@@ -58,10 +72,11 @@ proc printBalanceSheet(currencies: Table[string, Currency], accounts: seq[Accoun
   for value in currencies.values.toSeq.sorted(sortOnIndex):
     let currencyKey = value.key
 
+    echo "| ", currencyKey
     for account in accounts.filter(a => a.kind == AccountKind.Asset and a.currencyKey == currencyKey):
       let namePadLength = maxLengthName - account.key.len
       let balancePadLength = maxLengthBalance - account.toBalanceString.len
-      echo "| ", &"{account.key}", spaces(namePadLength), " | ", spaces(3 +
+      echo spaces(3 + currencyKey.len), &"{account.toSimpleName}", spaces(namePadLength), " | ", spaces(3 +
           balancePadLength), account.toBalanceString, " |"
     
   echo ""
@@ -69,10 +84,11 @@ proc printBalanceSheet(currencies: Table[string, Currency], accounts: seq[Accoun
   for value in currencies.values.toSeq.sorted(sortOnIndex):
     let currencyKey = value.key
 
+    echo "| ", currencyKey
     for account in accounts.filter(a => a.kind == AccountKind.Liability and a.currencyKey == currencyKey):
       let namePadLength = maxLengthName - account.key.len
       let balancePadLength = maxLengthBalance - account.toBalanceString.len
-      echo "| ", &"{account.key}", spaces(namePadLength), " | ", spaces(3 +
+      echo spaces(3 + currencyKey.len), &"{account.key}", spaces(namePadLength), " | ", spaces(3 +
           balancePadLength), account.toBalanceString, " |"
 
 
@@ -117,20 +133,20 @@ proc printIncomeStatement(currencies: Table[string, Currency], accounts: seq[
   let midGap = spaces(3)
 
   let nameHeader = "Name"
-  let namePadding = spaces(max(maxLengthName - nameHeader.len, 1))
+  let namePadding = spaces(max(maxLengthName - nameHeader.len, 0))
 
   let revenueHeader = "Revenue"
-  let revenuePadding = spaces(max(maxLengthRevenue - revenueHeader.len, 5))
+  let revenuePadding = spaces(max(maxLengthRevenue - revenueHeader.len, 0) + 3)
 
   let expenseHeader = "Expense"
-  let expensePadding = spaces(max(maxLengthExpense - expenseHeader.len, 5))
+  let expensePadding = spaces(max(maxLengthExpense - expenseHeader.len, 0) + 3)
 
   let netIncomeHeader = "Net Income"
-  let netIncomePadding = spaces(max(maxLengthNetIncome - netIncomeHeader.len, 5))
+  let netIncomePadding = spaces(max(maxLengthNetIncome - netIncomeHeader.len, 0) + 3)
 
   echo "\t--- INCOME STATEMENT ---\n"
-  echo endGap, nameHeader, namePadding, midGap, revenueHeader, revenuePadding,
-      expenseHeader, expensePadding, netIncomeHeader, netIncomePadding, endGap
+  echo endGap, nameHeader, namePadding, midGap, revenueHeader, revenuePadding, midGap,
+      expenseHeader, expensePadding, midGap, netIncomeHeader, netIncomePadding, endGap
   echo ""
 
   for key in currencies.keys:
@@ -152,6 +168,45 @@ proc printIncomeStatement(currencies: Table[string, Currency], accounts: seq[
         revenuePadLength), currencyRevenue.toAccountingString, " | ", spaces(3 +
         expensePadLength), currencyExpense.toAccountingString, " | ", spaces(3 + 
         netIncomePadLength), currencyNetIncome.toAccountingString, " |"
+
+  echo ""
+  echo spaces(2) & "Itemised Revenue" & "\n"
+  for key in currencies.keys:
+    let currencyKey = currencies[key].key
+    echo "| ", currencyKey
+
+    let maxLengthName = accounts.filter(a => a.kind == AccountKind.Revenue).map(a => a.toSimpleName.len).foldl(if b > a: b else: a)
+    let maxLengthBalance = accounts.filter(a => a.kind == AccountKind.Revenue).map(a => a.balance.toAccountingString.len).foldl(if b > a: b else: a)
+    for account in accounts.filter(a => a.kind == AccountKind.Revenue and a.currencyKey == currencyKey).sorted(sortOnSimpleName):
+      let namePadLength = maxLengthName - account.toSimpleName.len
+      let balancePadLength = maxLengthBalance - account.balance.toAccountingString.len
+      echo spaces(3 + key.len), account.toSimpleName, spaces(3 + namePadLength), " | ", spaces(3 + balancePadLength), account.balance.toAccountingString, " |"
+
+  echo ""
+  echo spaces(2) & "Itemised Expenses" & "\n"
+  for key in currencies.keys:
+    let currencyKey = currencies[key].key
+    echo "| ", currencyKey
+
+    let maxLengthName = accounts.filter(a => a.kind == AccountKind.Expense).map(a => a.toSimpleName.len).foldl(if b > a: b else: a)
+    let maxLengthBalance = accounts.filter(a => a.kind == AccountKind.Expense).map(a => a.balance.toAccountingString.len).foldl(if b > a: b else: a)
+    for account in accounts.filter(a => a.kind == AccountKind.Expense and a.currencyKey == currencyKey).sorted(sortOnSimpleName):
+      let namePadLength = maxLengthName - account.toSimpleName.len
+      let balancePadLength = maxLengthBalance - account.balance.toAccountingString.len
+      echo spaces(3 + key.len), account.toSimpleName, spaces(3 + namePadLength), " | ", spaces(3 + balancePadLength), account.balance.toAccountingString, " |"
+
+  echo ""
+  echo spaces(2) & "Other Equity Operations" & "\n"
+  for key in currencies.keys:
+    let currencyKey = currencies[key].key
+    echo "| ", currencyKey
+
+    let maxLengthName = accounts.filter(a => a.kind == AccountKind.Equity).map(a => a.toSimpleName.len).foldl(if b > a: b else: a)
+    let maxLengthBalance = accounts.filter(a => a.kind == AccountKind.Equity).map(a => a.balance.toAccountingString.len).foldl(if b > a: b else: a)
+    for account in accounts.filter(a => a.kind == AccountKind.Equity and a.currencyKey == currencyKey).sorted(sortOnSimpleName):
+      let namePadLength = maxLengthName - account.toSimpleName.len
+      let balancePadLength = maxLengthBalance - account.balance.toAccountingString.len
+      echo spaces(3 + key.len), account.toSimpleName, spaces(3 + namePadLength), " | ", spaces(3 + balancePadLength), account.balance.toAccountingString, " |"
 
 
 proc printTransactionJournal(transactions: seq[Transaction]) =
