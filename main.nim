@@ -5,6 +5,7 @@ import results
 import decimal/decimal # https://github.com/status-im/nim-decimal
 
 import types
+import account
 import parse
 import core
 import report
@@ -37,7 +38,7 @@ if filename == "":
 else:
   var buffer: Buffer = Buffer(
       currencies: initTable[string, Currency](),
-      accounts: initTable[string, OptionalAccount](), 
+      accounts: newAccountTree(parse("2022-01-01", "yyyy-MM-dd")), 
       conversionRatesBuffer: initTable[string, DecimalType](),
       exchangeAccounts: initTable[string, ExchangeAccount](),
       transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,

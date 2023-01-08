@@ -5,6 +5,7 @@ import decimal/decimal
 import results
 
 import types
+import account
 
 proc isMultiCurrency(transaction: Transaction): bool =
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
@@ -212,12 +213,15 @@ proc convertTransactionReporting(l: Ledger, transaction: Transaction,
 
 proc aggregateTransaction(l: Ledger, transaction: Transaction): void =
   for record in transaction.records:
-    let account = l.accounts[record.accountKey]
+    let accountO = l.accounts.findAccount(record.accountKey)
 
-    if account.norm == record.norm:
-      account.balance += record.amount
-    else:
-      account.balance -= record.amount
+    if accountO.isSome:
+      let account = accountO.get()
+      
+      if account.norm == record.norm:
+        account.balance += record.amount
+      else:
+        account.balance -= record.amount
 
 proc aggregateTransactions*(l: Ledger, reportingCurrencyKey: Option[
     string]): Ledger =

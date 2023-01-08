@@ -5,21 +5,16 @@ import decimal/decimal # https://github.com/status-im/nim-decimal
 import results # https://github.com/arnetheduck/nim-result
 
 import types
+import account
 
-proc parseAccountKind(accountKind: string): AccountKind =
-  case accountKind
-  of "Asset":
-    return Asset
-  of "Liability":
-    return Liability
-  of "Equity":
-    return Equity
-  of "Revenue":
-    return Revenue
-  of "Expense":
-    return Expense
-  else:
-    raise newException(ValueError, "Invalid Account Type")
+proc key*(account: AccountNode): string =
+  var current = account
+
+  while current.kind != Leaf:
+    result.add(current.v & ":")
+    current = current.succ
+
+  result.add(current.v)
 
 proc generateAccountNodes(nodeList: seq[string]): AccountNode =
   if nodeList.len == 1:
@@ -30,26 +25,11 @@ proc generateAccountNodes(nodeList: seq[string]): AccountNode =
   else:
     raise newException(RangeDefect, "Invalid Account Node List")
 
-proc accountKindToNorm(accountKind: AccountKind): Norm =
-  case accountKind
-  of Asset:
-    result = Debit
-  of Liability:
-    result = Credit
-  of Equity:
-    result = Credit
-  of Revenue:
-    result = Credit
-  of Expense:
-    result = Debit
-
-
-proc parseAccount(key: string, currencyKey: string): OptionalAccount =
+proc parseAccount(key: string, open: DateTime): Account =
   let elements = key.split(":")
-  let kind = parseAccountKind(elements[0])
+  let kind = parseKind(elements[0])
 
-  return OptionalAccount(key: key & ":" & currencyKey, kind: kind, norm: accountKindToNorm(kind), currencyKey: currencyKey, open: none(
-      DateTime), close: none(DateTime))
+  return newAccount(key=key, name=key, kind=kind, norm=kind.toNorm, open=open)
 
 proc parseNorm(norm: string): Norm =
   case norm
@@ -85,29 +65,21 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
     openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
-      let account = parseAccount($2, $3)
-
-      if account.key in buffer.accounts:
-        if buffer.accounts[account.key].open.isSome:
-          raise newException(ParseError, "Cannot define multiple open directives for the same account")
-        else:
-          buffer.accounts[account.key].open = some(date)
-      else:
-        buffer.accounts[account.key] = OptionalAccount(key: account.key, kind: account.kind,
-            norm: account.norm, currencyKey: account.currencyKey, open: some(date), close: none(DateTime))
+      let account = parseAccount($2, date)
+      echo account.key
+      # discard buffer.accounts.insertAccount(account)
 
     closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
-      let account = parseAccount($2, $3)
+      let accountKey = $2
 
-      if account.key in buffer.accounts:
-        if buffer.accounts[account.key].close.isSome:
-          raise newException(ParseError, "Cannot define multiple close directives for the same account")
-        else:
-          buffer.accounts[account.key].close = some(date)
+      let accountO = buffer.accounts.findAccount(accountKey)
+      if accountO.isSome():
+        let account = accountO.get()
+        account.close = some(date)
       else:
-        buffer.accounts[account.key] = OptionalAccount(key: account.key, kind: account.kind,
-            norm: account.norm, currencyKey: account.currencyKey, open: none(DateTime), close: some(date))
+        # TODO parse error
+        discard
 
     balanceDecl <- date * +Blank * "balance" * +Blank * account * +Blank *
         amount * +Blank * currency * *Blank * ?"\n"
@@ -148,7 +120,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
       let currencyKey = $4
       let accountKey = $1 & ":" & currencyKey
-      let accountKind = parseAccountKind(($1).split(":")[0])
+      let accountKind = parseKind(($1).split(":")[0])
 
       if buffer.transactions.newEntry:
         buffer.transactions.records.add(@[Record(accountKey: accountKey, kind: accountKind, 
@@ -180,22 +152,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
 proc transferBufferToLedger*(buffer: Buffer): Ledger =
   result.currencies = buffer.currencies
-
-  for key in buffer.accounts.keys:
-    let account = buffer.accounts[key]
-
-    let open = account.open
-    let close = account.close
-
-    if open.isNone:
-      raise newException(LogicError, "Account must have an opening date")
-
-    let concreteOpen = open.get
-    let concreteClose = if close.isSome: close.get else: buffer.transactions.lastDate
-
-    result.accounts[key] = Account(key: account.key, kind: account.kind,
-        norm: account.norm, currencyKey: account.currencyKey, open: concreteOpen, close: concreteClose,
-        balance: newDecimal("0.00"))
+  result.accounts = buffer.accounts
 
   for key in buffer.exchangeAccounts.keys:
     result.exchangeAccounts[key] = ExchangeAccount(key: key, referenceBalance: newDecimal("0.00"),

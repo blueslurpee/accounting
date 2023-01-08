@@ -3,6 +3,7 @@ import decimal/decimal
 import tables
 
 import types
+import account
 
 proc toSimpleName(a: Account): string
 
@@ -230,8 +231,7 @@ proc printTransactionJournal(transactions: seq[Transaction]) =
 
 
 proc reportLedger*(ledger: var Ledger, noJournal: bool = false) =
-  let accountSeq = collect(newSeq):
-    for key in ledger.accounts.keys: ledger.accounts[key]
+  let accountSeq = ledger.accounts.aggregation
 
   let exchangeAccountSeq = collect(newSeq):
     for key in ledger.exchangeAccounts.keys: ledger.exchangeAccounts[key]

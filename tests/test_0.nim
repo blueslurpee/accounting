@@ -1,23 +1,23 @@
 import std/options
+import std/times
+import ../types
 import ../account
 import results
 
 type R* = Result[void, string]
+let defaultDate = parse("2022-01-01", "yyyy-MM-dd")
 
 
 discard """"""
 block:
-    let tree = newAccountTree("USD")
+    let tree = newAccountTree(defaultDate)
     var account = tree.findAccount("Asset:Cash")
     assert account.isNone
 
-    account = tree.findAccount("Asset")
-    assert account.isSome
-
 block:
-    let tree = newAccountTree("USD")
-    let account = newAccount(key="Asset:Cash", name="Cash", norm=Norm.Debit, kind=AccountKind.Asset, currencyKey="USD")
-    let account2 = newAccount(key="Asset:Cash:Checking", name="Mercury Checking", norm=Norm.Debit, kind=AccountKind.Asset, currencyKey="USD")
+    let tree = newAccountTree(defaultDate)
+    let account = newAccount(key="Asset:Cash", name="Cash", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultDate)
+    let account2 = newAccount(key="Asset:Cash:Checking", name="Mercury Checking", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultDate)
     
     var r = tree.insertAccount(account)
     assert r.isOk
@@ -34,8 +34,8 @@ block:
     assert a.get().key == "Asset:Cash:Checking"
 
 block:
-    let tree = newAccountTree("USD")
-    let account = newAccount(key="Asset:Cash:Checking", name="Mercury Checking", norm=Norm.Debit, kind=AccountKind.Asset, currencyKey="USD")
+    let tree = newAccountTree(defaultDate)
+    let account = newAccount(key="Asset:Cash:Checking", name="Mercury Checking", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultDate)
     
     var r = tree.insertAccount(account)
     assert r.isOk
