@@ -15,6 +15,7 @@ proc writeVersion() = echo "0.0.1"
 # const filename = "./journal/test_2.txt"
 var filename: string = ""
 var reportingCurrencyKey = none(string)
+var noJournal: bool = false
 var p = initOptParser(os.commandLineParams())
 
 for kind, key, value in p.getopt():
@@ -25,6 +26,8 @@ for kind, key, value in p.getopt():
     case key
     of "report", "r":
       reportingCurrencyKey = some(value)
+    of "no-journal", "x":
+      noJournal = true
     of "help", "h": writeHelp()
     of "version", "v": writeVersion()
   of cmdEnd: assert(false) # cannot happen
@@ -45,7 +48,7 @@ else:
 
   if (checkTransactions.isOk):
     ledger = aggregateTransactions(ledger, reportingCurrencyKey)
-    reportLedger(ledger)
+    reportLedger(ledger, noJournal)
   else:
     echo checkTransactions.error
 

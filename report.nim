@@ -229,7 +229,7 @@ proc printTransactionJournal(transactions: seq[Transaction]) =
     echo ""
 
 
-proc reportLedger*(ledger: var Ledger) =
+proc reportLedger*(ledger: var Ledger, noJournal: bool = false) =
   let accountSeq = collect(newSeq):
     for key in ledger.accounts.keys: ledger.accounts[key]
 
@@ -244,6 +244,7 @@ proc reportLedger*(ledger: var Ledger) =
   printIncomeStatement(ledger.currencies, accountSeq, exchangeAccountSeq)
   echo ""
 
-  echo ""
-  printTransactionJournal(ledger.transactions)
-  echo ""
+  if not noJournal:
+    echo ""
+    printTransactionJournal(ledger.transactions)
+    echo ""
