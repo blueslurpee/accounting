@@ -42,8 +42,6 @@ proc accountKindToNorm(accountKind: AccountKind): Norm =
     result = Credit
   of Expense:
     result = Debit
-  of Exchange:
-    result = Credit
 
 
 proc parseAccount(key: string, currencyKey: string): OptionalAccount =
@@ -83,9 +81,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
       let accountKey = $1 & ":" & $2
       if accountKey in buffer.exchangeAccounts:
         raise newException(ParseError, "Cannot define multiple identical exchange accounts")
-      buffer.exchangeAccounts[accountKey] = ExchangeAccount(key: accountKey,
-          kind: AccountKind.Exchange, norm: Norm.Credit,
-          referenceBalance: newDecimal("0.00"), securityBalance: newDecimal("0.00"))
+      buffer.exchangeAccounts[accountKey] = ExchangeAccount(key: accountKey, referenceBalance: newDecimal("0.00"), securityBalance: newDecimal("0.00"))
 
     openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
@@ -202,8 +198,7 @@ proc transferBufferToLedger*(buffer: Buffer): Ledger =
         balance: newDecimal("0.00"))
 
   for key in buffer.exchangeAccounts.keys:
-    result.exchangeAccounts[key] = ExchangeAccount(key: key, kind: AccountKind.Exchange,
-        norm: Norm.Credit, referenceBalance: newDecimal("0.00"),
+    result.exchangeAccounts[key] = ExchangeAccount(key: key, referenceBalance: newDecimal("0.00"),
         securityBalance: newDecimal("0.00"))
 
   for i in 0 .. buffer.transactions.index - 1:
