@@ -21,6 +21,9 @@ proc newAccountTree*(defaultOpen: DateTime): AccountTree =
 proc newAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account = 
     result = Account(key: key, name: name, norm: norm, kind: kind, open: open, balances: @[], children: @[])
 
+proc toAccountingString(decimal: DecimalType): string =
+  return (if decimal >= 0: $decimal else: "(" & $decimal.abs & ")")
+
 proc splitKey*(key: string): seq[string] =
     result = key.split(":")
 
@@ -113,21 +116,83 @@ proc insertAccount*(tree: AccountTree, account: Account): R =
             immediateParent.children.add(account)
             return tree.insertAccount(immediateParent)
 
+proc hasCurrency*(account: Account, queryCurrencyKey: string): bool = 
+    for (currencyKey, _) in account.balances:
+        if currencyKey == queryCurrencyKey:
+            return true
+    
+    return false
+
+proc getBalance*(account: Account, queryCurrencyKey: string): DecimalType = 
+    for (currencyKey, balance) in account.balances:
+        if currencyKey == queryCurrencyKey:
+            return balance
+
+    return newDecimal("0.00")
 
 proc incrementBalance*(account: Account, currencyKey: string, amount: DecimalType): Account =
-    account.balances = account.balances.map(b => 
-    (if b.currencyKey == currencyKey: 
-        cascade b: 
-            balance = b.balance + amount 
-    else: b))
+    if account.hasCurrency(currencyKey):
+        account.balances = account.balances.map(b => 
+        (if b.currencyKey == currencyKey: 
+            cascade b: 
+                balance = b.balance + amount 
+        else: b))
+    else:
+        account.balances.add((currencyKey: currencyKey, balance: amount))
 
     return account
 
 proc decrementBalance*(account: Account, currencyKey: string, amount: DecimalType): Account =
-    account.balances = account.balances.map(b => 
-    (if b.currencyKey == currencyKey: 
-        cascade b: 
-            balance = b.balance - amount 
-    else: b))
+    if account.hasCurrency(currencyKey):
+        account.balances = account.balances.map(b => 
+        (if b.currencyKey == currencyKey: 
+            cascade b: 
+                balance = b.balance - amount 
+        else: b))
+    else:
+        account.balances.add((currencyKey: currencyKey, balance: amount * -1))
 
     return account
+
+proc reportComponents*(account: Account, depth: int = 0): tuple[left: string, right: string, remaining: seq[string]] =
+    let left = "| " & spaces(2 * depth) & account.name
+    let right = (
+        if account.balances.len == 0: 
+            "-- |" 
+        else: 
+            let (currencyKey, balance) = account.balances[0]
+            let endS = if account.balances.len == 1: " |\n" else: " |"
+            currencyKey & spaces(1) & balance.toAccountingString & endS
+    )
+    
+    var remaining: seq[string] = @[]
+    for i in 1..account.balances.high:
+        let (currencyKey, balance) = account.balances[i]
+        let line = currencyKey & spaces(2) & balance.toAccountingString
+        remaining.add(line)
+
+    return (left, right, remaining)
+
+
+proc reportLength*(account: Account, depth: int = 0): int =
+    let (left, right, _) = account.reportComponents(depth)
+    return left.len + right.len
+
+proc maxReportLength*(account: Account, depth: int = 0): int =
+    if account.children.len == 0:
+        return account.reportLength(depth)
+    else:
+        return account.children.map(a => a.maxReportLength(depth + 1)).foldl(if a > b: a else: b, account.reportLength(depth))
+
+proc echoSelf*(account: Account, maxReportLength: int = -1, depth: int = 0): void =
+    var maxReportLength = if maxReportLength == -1: account.maxReportLength else: maxReportLength
+
+    let (left, right, remaining) = account.reportComponents(depth)
+    let gapLength = max((maxReportLength + 8) - (account.reportLength(depth)), 9) # ?
+
+    echo left & spaces(gapLength) & right
+    for s in remaining:
+        echo "| ", spaces(left.len - 2 + gapLength), s, spaces(1), "|"
+
+    for child in account.children:
+        child.echoSelf(maxReportLength, depth + 1)

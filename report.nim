@@ -32,9 +32,6 @@ proc toRateStringSequence(rates: seq[string]): string =
       result = " " & result & s
   result = result & "]"
 
-proc toAccountingString(decimal: DecimalType): string =
-  return (if decimal >= 0: $decimal else: "(" & $decimal.abs & ")")
-
 proc printBalanceSheet(currencies: Table[string, Currency], accounts: seq[Account],
     exchangeAccounts: seq[ExchangeAccount]): void =
   # let nameLengths = accounts.map(x => len(x.key)).concat(exchangeAccounts.map(
