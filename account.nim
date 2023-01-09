@@ -1,6 +1,9 @@
-import std/[options, times]
+import std/[options, times, sugar]
 import strutils
+import sequtils
 import tables
+
+import cascade
 import decimal/decimal
 import results
 import types
@@ -111,3 +114,20 @@ proc insertAccount*(tree: AccountTree, account: Account): R =
             return tree.insertAccount(immediateParent)
 
 
+proc incrementBalance*(account: Account, currencyKey: string, amount: DecimalType): Account =
+    account.balances = account.balances.map(b => 
+    (if b.currencyKey == currencyKey: 
+        cascade b: 
+            balance = b.balance + amount 
+    else: b))
+
+    return account
+
+proc decrementBalance*(account: Account, currencyKey: string, amount: DecimalType): Account =
+    account.balances = account.balances.map(b => 
+    (if b.currencyKey == currencyKey: 
+        cascade b: 
+            balance = b.balance - amount 
+    else: b))
+
+    return account

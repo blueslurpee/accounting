@@ -23,16 +23,17 @@ proc extractCurrencies(transaction: Transaction): tuple[
 
 proc getConversionRate(transaction: Transaction, referenceCurrencyKey: string,
     securityCurrencyKey: string): DecimalType =
-  let forwardKey = referenceCurrencyKey & ":" & securityCurrencyKey
-  if forwardKey in transaction.conversionRates:
-    return transaction.conversionRates[forwardKey]
+  let queryKey = referenceCurrencyKey & ":" & securityCurrencyKey
+  let converseQueryKey = securityCurrencyKey & ":" & referenceCurrencyKey
 
-  let reverseKey = securityCurrencyKey & ":" & referenceCurrencyKey
-  if reverseKey in transaction.conversionRates:
-    return 1 / transaction.conversionRates[reverseKey]
+  for (key, rate) in transaction.conversionRates:
+    if key == queryKey:
+      return rate
+    elif key == converseQueryKey:
+      return (1 / rate).quantize(rate)
 
   # Change to Result Type
-  raise newException(LogicError, "Conversion Rate Not Provided for " & transaction.payee)
+  raise newException(LogicError, "Conversion Rate Not Provided for transaction:" & transaction.index.intToStr & " - " & transaction.payee)
 
 proc getExchangeAccount(exchangeAccounts: Table[string, ExchangeAccount],
     referenceCurrencyKey: string, securityCurrencyKey: string): tuple[
@@ -74,6 +75,7 @@ let verifyEqualDebitsAndCredits*: Verifier = proc(transaction: Transaction): R =
       return R.ok
     else:
       echo "TRANSACTION ", transaction.date, " ", transaction.payee
+      
       return R.err "Debits and Credits must sum to 0"
   else:
     let (referenceCurrencyKey, securityCurrencyKey) = extractCurrencies(transaction)
@@ -118,7 +120,7 @@ proc verifyTransactions*(transactions: seq[Transaction], verifiers: seq[Verifier
 proc convertTransactionExchanges(l: Ledger, transaction: Transaction): Transaction = 
   if transaction.isMultiCurrency:
     let (referenceCurrencyKey, securityCurrencyKey) = extractCurrencies(transaction)
-    let (exchangeAccount, flipped) = getExchangeAccount(l.exchangeAccounts,
+    let (exchangeAccount, flipped) = getExchangeAccount(l.accounts.exchange,
         referenceCurrencyKey, securityCurrencyKey)
 
     let referenceDebitAmount = transaction.records.filter(r =>
@@ -156,7 +158,7 @@ proc convertTransactionReporting(l: Ledger, transaction: Transaction,
     if (record.kind == AccountKind.Revenue or record.kind ==
         AccountKind.Expense) and record.currencyKey != reportingCurrencyKey:
       let conversionRate = getConversionRate(transaction, record.currencyKey, reportingCurrencyKey) # We want to convert to reference, so reference is reference
-      let (exchangeAccount, flipped) = getExchangeAccount(l.exchangeAccounts, reportingCurrencyKey, record.currencyKey)
+      let (exchangeAccount, flipped) = getExchangeAccount(l.accounts.exchange, reportingCurrencyKey, record.currencyKey)
       let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
 
       if record.kind == AccountKind.Revenue:
@@ -217,11 +219,12 @@ proc aggregateTransaction(l: Ledger, transaction: Transaction): void =
 
     if accountO.isSome:
       let account = accountO.get()
-      
+      let currencyKey = record.currencyKey
+
       if account.norm == record.norm:
-        account.balance += record.amount
+        discard account.incrementBalance(currencyKey, record.amount)
       else:
-        account.balance -= record.amount
+        discard account.decrementBalance(currencyKey, record.amount)
 
 proc aggregateTransactions*(l: Ledger, reportingCurrencyKey: Option[
     string]): Ledger =

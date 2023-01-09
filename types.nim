@@ -62,7 +62,7 @@ type
         date*: DateTime
         payee*: string
         note*: string
-        conversionRates*: Table[string, DecimalType]
+        conversionRates*: seq[tuple[key: string, rate: DecimalType]]
         records*: seq[Record]
     Record* = object
         accountKey*: string
@@ -73,28 +73,16 @@ type
     Verifier* = proc(transaction: Transaction): R
 
 type
-    ExchangeAccountBuffer* = Table[string, ExchangeAccount]
-    TransactionBuffer* = object
-        index*: int
-        lastDate*: DateTime
-        newEntry*: bool
-        dates*: seq[DateTime]
-        payees*: seq[string]
-        notes*: seq[string]
-        conversionRates*: seq[Table[string, DecimalType]]
-        records*: seq[seq[Record]]
     Buffer* = object
+        index*: int
+        conversionRatesBuffer*: seq[tuple[key: string, rate: DecimalType]]
         accounts*: AccountTree
-        exchangeAccounts*: ExchangeAccountBuffer
         currencies*: Table[string, Currency]
-        conversionRatesBuffer*: Table[string, DecimalType]
-        transactions*: TransactionBuffer
-
-type Ledger* = object
-    currencies*: Table[string, Currency]
-    accounts*: AccountTree
-    exchangeAccounts*: Table[string, ExchangeAccount]
-    transactions*: seq[Transaction]
+        transactions*: seq[Transaction]
+    Ledger* = object
+        accounts*: AccountTree
+        currencies*: Table[string, Currency]
+        transactions*: seq[Transaction]
 
 proc toNorm*(accountKind: AccountKind): Norm =
   case accountKind

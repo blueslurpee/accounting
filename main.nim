@@ -2,7 +2,6 @@ import std/[os, times, parseopt, options]
 import tables
 
 import results
-import decimal/decimal # https://github.com/status-im/nim-decimal
 
 import types
 import account
@@ -37,12 +36,12 @@ if filename == "":
   writeHelp()
 else:
   var buffer: Buffer = Buffer(
-      currencies: initTable[string, Currency](),
+      index: 0,
+      conversionRatesBuffer: @[],
       accounts: newAccountTree(parse("2022-01-01", "yyyy-MM-dd")), 
-      conversionRatesBuffer: initTable[string, DecimalType](),
-      exchangeAccounts: initTable[string, ExchangeAccount](),
-      transactions: TransactionBuffer(lastDate: dateTime(0000, mJan, 1, 00, 00,
-      00, 00, utc())))
+      currencies: initTable[string, Currency](),
+      transactions: @[]
+  )
 
   var ledger = transferBufferToLedger(parseFileIntoBuffer(filename, buffer))
   let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])

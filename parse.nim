@@ -59,14 +59,13 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     exchangeDecl <- "exchange-pair" * +Blank * >currency * ":" * >currency *
         *Blank * ?"\n":
       let accountKey = $1 & ":" & $2
-      if accountKey in buffer.exchangeAccounts:
+      if accountKey in buffer.accounts.exchange:
         raise newException(ParseError, "Cannot define multiple identical exchange accounts")
-      buffer.exchangeAccounts[accountKey] = ExchangeAccount(key: accountKey, referenceBalance: newDecimal("0.00"), securityBalance: newDecimal("0.00"))
+      buffer.accounts.exchange[accountKey] = ExchangeAccount(key: accountKey, referenceBalance: newDecimal("0.00"), securityBalance: newDecimal("0.00"))
 
     openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
       let account = parseAccount($2, date)
-      echo account.key
       # discard buffer.accounts.insertAccount(account)
 
     closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
@@ -93,41 +92,29 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
     exchangeRates <- "@" * >currency * ":" * >currency * *Blank * >rate * *Blank * "\n":
       let currencyKey = $1 & ":" & $2
-      buffer.conversionRatesBuffer[currencyKey] = newDecimal($3)
+      buffer.conversionRatesBuffer.add((currencyKey, newDecimal($3)))
 
     transactionHeader <- >date * +Blank * "*" * +Blank * >payee * *Blank *
         >?note * *Blank * "\n":
       let date: DateTime = parse($1, "yyyy-MM-dd")
-      let transactionExchangeRates = buffer.conversionRatesBuffer
 
-      buffer.transactions.newEntry = true
-      buffer.transactions.index += 1
-      buffer.transactions.dates.add(date)
-      buffer.transactions.payees.add($2)
-      buffer.transactions.notes.add($3)
-      buffer.transactions.conversionRates.add(transactionExchangeRates)
-
-      buffer.conversionRatesBuffer = initTable[string, DecimalType]()
-
-      if (date > buffer.transactions.lastDate):
-        buffer.transactions.lastDate = date
+      buffer.transactions.add(Transaction(
+        index: buffer.index,
+        date: date,
+        payee: $2,
+        note: $3,
+        conversionRates: buffer.conversionRatesBuffer,
+        records: @[]
+      ))
+      buffer.conversionRatesBuffer = @[]
 
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
         >currency * *Blank * ?("@" * *Blank * >rate * *Blank * >currency) * ?"\n":
-      let conversionRate = (if capture.len == 7: some(newDecimal(
-          $5)) else: none(DecimalType))
-      let conversionTarget = (if capture.len == 7: some($6) else: none(string))
-
       let currencyKey = $4
       let accountKey = $1 & ":" & currencyKey
       let accountKind = parseKind(($1).split(":")[0])
 
-      if buffer.transactions.newEntry:
-        buffer.transactions.records.add(@[Record(accountKey: accountKey, kind: accountKind, 
-            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey)])
-        buffer.transactions.newEntry = false
-      else:
-        buffer.transactions.records[^1].add(Record(accountKey: accountKey, kind: accountKind,
+      buffer.transactions[^1].records.add(Record(accountKey: accountKey, kind: accountKind,
             norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey))
 
     account <- accountKind * ":" * accountTree
@@ -151,16 +138,6 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   result = buffer
 
 proc transferBufferToLedger*(buffer: Buffer): Ledger =
-  result.currencies = buffer.currencies
   result.accounts = buffer.accounts
-
-  for key in buffer.exchangeAccounts.keys:
-    result.exchangeAccounts[key] = ExchangeAccount(key: key, referenceBalance: newDecimal("0.00"),
-        securityBalance: newDecimal("0.00"))
-
-  for i in 0 .. buffer.transactions.index - 1:
-    let note = if buffer.transactions.notes[i] != "": buffer.transactions.notes[i] else: "n/a"
-    let transaction = Transaction(index: i, date: buffer.transactions.dates[i],
-        payee: buffer.transactions.payees[i], note: note, conversionRates: buffer.transactions.conversionRates[i],
-        records: buffer.transactions.records[i])
-    result.transactions.add(transaction)
+  result.currencies = buffer.currencies
+  result.transactions = buffer.transactions
