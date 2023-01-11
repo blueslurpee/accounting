@@ -75,4 +75,19 @@ block:
     assert account3.getBalance("CHF") == newDecimal("1000.00")
     tree.assets.echoSelf()
 
+block:
+    let tree = newAccountTree(defaultDate)
+    let account = newAccount(key="Asset:Cash:Checking", name="Mercury Checking", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultDate)
+
+    var r = tree.insertAccount(account)
+    assert r.isOk
+
+    let parent = tree.findAccount("Asset:Cash")
+    discard account.incrementBalance("USD", newDecimal("100.00"))
+    assert account.getBalance("USD") == newDecimal("100.00")
+    assert parent.get().getBalance("USD") == newDecimal("100.00")
+    let root = tree.findAccount("Asset")
+    assert root.get.getBalance("USD") == newDecimal("100.00")
+
+
     

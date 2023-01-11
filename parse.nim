@@ -66,7 +66,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     openDecl <- >date * +Blank * "open" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
       let account = parseAccount($2, date)
-      # discard buffer.accounts.insertAccount(account)
+      discard buffer.accounts.insertAccount(account)
 
     closeDecl <- >date * +Blank * "close" * +Blank * >account * *Blank * >currency * *Blank * ?"\n":
       let date = parse($1, "yyyy-MM-dd")
@@ -111,7 +111,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
         >currency * *Blank * ?("@" * *Blank * >rate * *Blank * >currency) * ?"\n":
       let currencyKey = $4
-      let accountKey = $1 & ":" & currencyKey
+      let accountKey = $1
       let accountKind = parseKind(($1).split(":")[0])
 
       buffer.transactions[^1].records.add(Record(accountKey: accountKey, kind: accountKind,

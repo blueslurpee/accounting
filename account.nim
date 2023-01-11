@@ -8,18 +8,22 @@ import decimal/decimal
 import results
 import types
 
+proc newRootAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account
 proc newAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account
 
 proc newAccountTree*(defaultOpen: DateTime): AccountTree =
-    result = AccountTree(assets: newAccount(key="Asset", name="Assets", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultOpen), 
-                        liabilities: newAccount(key="Liability", name="Liabilities", norm=Norm.Credit, kind=AccountKind.Liability, open=defaultOpen),
-                        equity: newAccount(key="Equity", name="Equity", norm=Norm.Credit, kind=AccountKind.Equity, open=defaultOpen),
-                        revenue: newAccount(key="Revenue", name="Revenue", norm=Norm.Credit, kind=AccountKind.Revenue, open=defaultOpen),
-                        expenses: newAccount(key="Expense", name="Expense", norm=Norm.Debit, kind=AccountKind.Expense, open=defaultOpen),
+    result = AccountTree(assets: newRootAccount(key="Asset", name="Assets", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultOpen), 
+                        liabilities: newRootAccount(key="Liability", name="Liabilities", norm=Norm.Credit, kind=AccountKind.Liability, open=defaultOpen),
+                        equity: newRootAccount(key="Equity", name="Equity", norm=Norm.Credit, kind=AccountKind.Equity, open=defaultOpen),
+                        revenue: newRootAccount(key="Revenue", name="Revenue", norm=Norm.Credit, kind=AccountKind.Revenue, open=defaultOpen),
+                        expenses: newRootAccount(key="Expense", name="Expense", norm=Norm.Debit, kind=AccountKind.Expense, open=defaultOpen),
                         exchange: initTable[string, ExchangeAccount]())
 
+proc newRootAccount(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account = 
+    result = Account(key: key, name: name, norm: norm, kind: kind, position: TreePosition.Root, open: open, balances: @[], children: @[])
+
 proc newAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account = 
-    result = Account(key: key, name: name, norm: norm, kind: kind, open: open, balances: @[], children: @[])
+    result = Account(key: key, name: name, norm: norm, kind: kind, position: TreePosition.Inner, open: open, balances: @[], children: @[])
 
 proc toAccountingString(decimal: DecimalType): string =
   return (if decimal >= 0: $decimal else: "(" & $decimal.abs & ")")
@@ -108,12 +112,18 @@ proc insertAccount*(tree: AccountTree, account: Account): R =
         let levelDifference = account.key.splitKey.len - parent.key.splitKey.len
 
         if levelDifference == 1:
-            parent.children.add(account)
-            return R.ok
+            case account.position:
+            of TreePosition.Root:
+                return R.err "Cannot add a root account type"
+            of TreePosition.Inner:
+                parent.children.add(account)
+                account.parent = parent
+                return R.ok
 
         else:
             let immediateParent = newAccount(account.key.truncateKey, account.key.truncateKey, account.norm, account.kind, account.open)
             immediateParent.children.add(account)
+            account.parent = immediateParent
             return tree.insertAccount(immediateParent)
 
 proc hasCurrency*(account: Account, queryCurrencyKey: string): bool = 
@@ -140,6 +150,11 @@ proc incrementBalance*(account: Account, currencyKey: string, amount: DecimalTyp
     else:
         account.balances.add((currencyKey: currencyKey, balance: amount))
 
+    case account.position:
+    of TreePosition.Root: discard
+    of TreePosition.Inner:
+        discard account.parent.incrementBalance(currencyKey, amount)
+
     return account
 
 proc decrementBalance*(account: Account, currencyKey: string, amount: DecimalType): Account =
@@ -152,6 +167,11 @@ proc decrementBalance*(account: Account, currencyKey: string, amount: DecimalTyp
     else:
         account.balances.add((currencyKey: currencyKey, balance: amount * -1))
 
+    case account.position:
+    of TreePosition.Root: discard
+    of TreePosition.Inner:
+        discard account.parent.decrementBalance(currencyKey, amount)
+
     return account
 
 proc reportComponents*(account: Account, depth: int = 0): tuple[left: string, right: string, remaining: seq[string]] =
@@ -161,14 +181,15 @@ proc reportComponents*(account: Account, depth: int = 0): tuple[left: string, ri
             "-- |" 
         else: 
             let (currencyKey, balance) = account.balances[0]
-            let endS = if account.balances.len == 1: " |\n" else: " |"
+            let endS = if account.balances.len == 1: " |\n" else: " | "
             currencyKey & spaces(1) & balance.toAccountingString & endS
     )
     
     var remaining: seq[string] = @[]
     for i in 1..account.balances.high:
         let (currencyKey, balance) = account.balances[i]
-        let line = currencyKey & spaces(2) & balance.toAccountingString
+        let negative = balance < 0
+        let line = currencyKey & spaces(if negative: 2 else: 1) & balance.toAccountingString & (if negative: "|" else: " |")
         remaining.add(line)
 
     return (left, right, remaining)
@@ -185,14 +206,16 @@ proc maxReportLength*(account: Account, depth: int = 0): int =
         return account.children.map(a => a.maxReportLength(depth + 1)).foldl(if a > b: a else: b, account.reportLength(depth))
 
 proc echoSelf*(account: Account, maxReportLength: int = -1, depth: int = 0): void =
-    var maxReportLength = if maxReportLength == -1: account.maxReportLength else: maxReportLength
+    var maxReportLength = if maxReportLength == -1: account.maxReportLength + 10 else: maxReportLength
 
     let (left, right, remaining) = account.reportComponents(depth)
-    let gapLength = max((maxReportLength + 8) - (account.reportLength(depth)), 9) # ?
+    let gapLength = maxReportLength - account.reportLength(depth)
 
     echo left & spaces(gapLength) & right
     for s in remaining:
-        echo "| ", spaces(left.len - 2 + gapLength), s, spaces(1), "|"
+        let fillLength = maxReportLength - (s.len + 3)
+        echo "| ", spaces(fillLength), s
 
     for child in account.children:
+        echo child.name
         child.echoSelf(maxReportLength, depth + 1)
