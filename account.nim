@@ -194,22 +194,21 @@ proc reportComponents*(account: Account, depth: int = 0): tuple[left: string, ri
     return (left, right, remaining)
 
 
-proc reportLength*(account: Account, depth: int = 0): int =
+proc reportLength*(account: Account, depth: int = 0, buffer: int = 10): int =
     let (left, right, _) = account.reportComponents(depth)
     return left.len + right.len
 
-proc maxReportLength*(account: Account, depth: int = 0): int =
+proc maxReportLength*(account: Account, depth: int = 0, buffer: int = 10): int =
     if account.children.len == 0:
-        return account.reportLength(depth)
+        return account.reportLength(depth, buffer)
     else:
-        return account.children.map(a => a.maxReportLength(depth + 1)).foldl(if a > b: a else: b, account.reportLength(depth))
+        return account.children.map(a => a.maxReportLength(depth + 1, buffer)).foldl(if a > b: a else: b, account.reportLength(depth, buffer))
 
-proc maxReportLength*(tree: AccountTree): int = 
-    return max(@[tree.assets.maxReportLength, tree.liabilities.maxReportLength, tree.equity.maxReportLength, tree.revenue.maxReportLength, tree.expenses.maxReportLength])
+proc maxReportLength*(tree: AccountTree, buffer: int = 10): int = 
+    return max(@[tree.assets.maxReportLength(0, buffer), tree.liabilities.maxReportLength(0, buffer), tree.equity.maxReportLength(0, buffer), tree.revenue.maxReportLength(0, buffer), tree.expenses.maxReportLength(0, buffer)]) + buffer
 
 proc echoSelf*(account: Account, maxReportLength: int = -1, depth: int = 0): void =
-    var maxReportLength = if maxReportLength == -1: account.maxReportLength + 10 else: maxReportLength
-
+    var maxReportLength = if maxReportLength == -1: account.maxReportLength else: maxReportLength
     let (left, right, remaining) = account.reportComponents(depth)
     let gapLength = maxReportLength - account.reportLength(depth)
 
