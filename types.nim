@@ -120,3 +120,12 @@ proc parseKind*(kind: string): AccountKind =
     return Expense
   else:
     raise newException(ValueError, "Invalid Account Type")
+
+proc toAccountingString*(decimal: DecimalType): string =
+  return (
+        if decimal > 0: 
+            $decimal 
+        else: 
+            if decimal == 0: 
+                "--" 
+            else: "(" & $decimal.abs & ")")

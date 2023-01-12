@@ -25,8 +25,6 @@ proc newRootAccount(key: string, name: string, norm: Norm, kind: AccountKind, op
 proc newAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account = 
     result = Account(key: key, name: name, norm: norm, kind: kind, position: TreePosition.Inner, open: open, balances: @[], children: @[])
 
-proc toAccountingString(decimal: DecimalType): string =
-  return (if decimal >= 0: $decimal else: "(" & $decimal.abs & ")")
 
 proc splitKey*(key: string): seq[string] =
     result = key.split(":")
@@ -178,18 +176,19 @@ proc reportComponents*(account: Account, depth: int = 0): tuple[left: string, ri
     let left = "| " & spaces(2 * depth) & account.name
     let right = (
         if account.balances.len == 0: 
-            "-- |" 
+            "-- | " 
         else: 
-            let (currencyKey, balance) = account.balances[0]
-            let endS = if account.balances.len == 1: " |\n" else: " | "
-            currencyKey & spaces(1) & balance.toAccountingString & endS
+            if account.balances.all(x => x.balance == newDecimal("0.00")):
+                " -- | "
+            else:
+                let (currencyKey, balance) = account.balances[0]
+                currencyKey & spaces(1) & balance.toAccountingString & " | "
     )
     
     var remaining: seq[string] = @[]
     for i in 1..account.balances.high:
         let (currencyKey, balance) = account.balances[i]
-        let negative = balance < 0
-        let line = currencyKey & spaces(if negative: 2 else: 1) & balance.toAccountingString & (if negative: "|" else: " |")
+        let line = currencyKey & spaces(1) & balance.toAccountingString & " |"
         remaining.add(line)
 
     return (left, right, remaining)
@@ -205,6 +204,9 @@ proc maxReportLength*(account: Account, depth: int = 0): int =
     else:
         return account.children.map(a => a.maxReportLength(depth + 1)).foldl(if a > b: a else: b, account.reportLength(depth))
 
+proc maxReportLength*(tree: AccountTree): int = 
+    return max(@[tree.assets.maxReportLength, tree.liabilities.maxReportLength, tree.equity.maxReportLength, tree.revenue.maxReportLength, tree.expenses.maxReportLength])
+
 proc echoSelf*(account: Account, maxReportLength: int = -1, depth: int = 0): void =
     var maxReportLength = if maxReportLength == -1: account.maxReportLength + 10 else: maxReportLength
 
@@ -217,5 +219,4 @@ proc echoSelf*(account: Account, maxReportLength: int = -1, depth: int = 0): voi
         echo "| ", spaces(fillLength), s
 
     for child in account.children:
-        echo child.name
         child.echoSelf(maxReportLength, depth + 1)

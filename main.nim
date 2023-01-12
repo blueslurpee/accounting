@@ -48,7 +48,7 @@ else:
 
   if (checkTransactions.isOk):
     ledger = aggregateTransactions(ledger, reportingCurrencyKey)
-    reportLedger(ledger, noJournal)
+    reportLedger(ledger, reportingCurrencyKey, noJournal)
   else:
     echo checkTransactions.error
 

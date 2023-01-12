@@ -1,6 +1,6 @@
-import std/[sequtils, sugar, strutils, strformat, algorithm, times]
+import std/[sugar, strutils, times, strformat]
+import options
 import decimal/decimal
-import tables
 
 import types
 import account
@@ -15,18 +15,16 @@ proc toRateStringSequence(rates: seq[string]): string =
       result = " " & result & s
   result = result & "]"
 
-proc printBalanceSheet(l: Ledger): void =
+proc printBalanceSheet(l: Ledger, length: int = -1): void =
   echo "\t--- BALANCE SHEET ---\n"
-  # echo endGap, nameHeader, namePadding, midGap, balanceHeader, balancePadding, endGap
-
   echo ""
-  l.accounts.assets.echoSelf()
+  l.accounts.assets.echoSelf(length)
     
   echo ""
-  l.accounts.liabilities.echoSelf()
+  l.accounts.liabilities.echoSelf(length)
 
   echo ""
-  l.accounts.equity.echoSelf()
+  l.accounts.equity.echoSelf(length)
 
   # echo ""
   # echo spaces(2) & "Exchange Accounts" & "\n"
@@ -38,14 +36,18 @@ proc printBalanceSheet(l: Ledger): void =
   #       3 + balancePadLength), exchangeAccount.toBalanceString, " |"
 
 
-proc printIncomeStatement(l: Ledger): void =
+proc printIncomeStatement(l: Ledger, reportingCurrencyKey: Option[string], length: int = -1): void =
   echo "\t--- INCOME STATEMENT ---\n"
+  echo ""
+  l.accounts.revenue.echoSelf(length)
 
   echo ""
-  l.accounts.revenue.echoSelf()
+  l.accounts.expenses.echoSelf(length)
 
-  echo ""
-  l.accounts.expenses.echoSelf()
+  if reportingCurrencyKey.isSome():
+    let ni = (l.accounts.revenue.getBalance("USD") - l.accounts.expenses.getBalance("USD")).toAccountingString
+    echo ""
+    echo &"\t--- NET INCOME: {ni} {reportingCurrencyKey.get()} ---\n"
 
 
 proc printTransactionJournal(transactions: seq[Transaction]) =
@@ -68,13 +70,14 @@ proc printTransactionJournal(transactions: seq[Transaction]) =
     echo ""
 
 
-proc reportLedger*(ledger: Ledger, noJournal: bool = false) =
+proc reportLedger*(ledger: Ledger, reportingCurrencyKey: Option[string], noJournal: bool = false) =
+  let maxReportLength = ledger.accounts.maxReportLength
   echo ""
-  printBalanceSheet(ledger)
+  printBalanceSheet(ledger, maxReportLength)
   echo ""
 
   echo ""
-  printIncomeStatement(ledger)
+  printIncomeStatement(ledger, reportingCurrencyKey, maxReportLength)
   echo ""
 
   if not noJournal:
