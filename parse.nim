@@ -107,6 +107,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
         records: @[]
       ))
       buffer.conversionRatesBuffer = @[]
+      buffer.index += 1
 
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
         >currency * *Blank * ?("@" * *Blank * >rate * *Blank * >currency) * ?"\n":

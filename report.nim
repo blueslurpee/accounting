@@ -16,15 +16,17 @@ proc toRateStringSequence(rates: seq[string]): string =
   result = result & "]"
 
 proc printBalanceSheet(l: Ledger, length: int = -1): void =
+  let maxBalanceLength = l.accounts.maxBalanceLength
+
   echo "\t--- BALANCE SHEET ---\n"
   echo ""
-  l.accounts.assets.echoSelf(length)
+  l.accounts.assets.echoSelf(length, 0, maxBalanceLength)
     
   echo ""
-  l.accounts.liabilities.echoSelf(length)
+  l.accounts.liabilities.echoSelf(length, 0, maxBalanceLength)
 
   echo ""
-  l.accounts.equity.echoSelf(length)
+  l.accounts.equity.echoSelf(length, 0, maxBalanceLength)
 
   # echo ""
   # echo spaces(2) & "Exchange Accounts" & "\n"
@@ -37,17 +39,20 @@ proc printBalanceSheet(l: Ledger, length: int = -1): void =
 
 
 proc printIncomeStatement(l: Ledger, reportingCurrencyKey: Option[string], length: int = -1): void =
+  let maxBalanceLength = l.accounts.maxBalanceLength
+
   echo "\t--- INCOME STATEMENT ---\n"
   echo ""
-  l.accounts.revenue.echoSelf(length)
+  l.accounts.revenue.echoSelf(length, 0, maxBalanceLength)
 
   echo ""
-  l.accounts.expenses.echoSelf(length)
+  l.accounts.expenses.echoSelf(length, 0, maxBalanceLength)
 
   if reportingCurrencyKey.isSome():
-    let ni = (l.accounts.revenue.getBalance("USD") - l.accounts.expenses.getBalance("USD")).toAccountingString
+    let currencyKey  = reportingCurrencyKey.get()
+    let ni = (l.accounts.revenue.getBalance(currencyKey) - l.accounts.expenses.getBalance(currencyKey)).toAccountingString
     echo ""
-    echo &"\t--- NET INCOME: {ni} {reportingCurrencyKey.get()} ---\n"
+    echo &"\t--- NET INCOME: {ni} {currencyKey} ---\n"
 
 
 proc printTransactionJournal(transactions: seq[Transaction]) =

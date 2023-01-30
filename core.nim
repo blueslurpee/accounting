@@ -33,7 +33,7 @@ proc getConversionRate(transaction: Transaction, referenceCurrencyKey: string,
       return (1 / rate).quantize(rate)
 
   # Change to Result Type
-  raise newException(LogicError, "Conversion Rate Not Provided for transaction:" & transaction.index.intToStr & " - " & transaction.payee)
+  raise newException(LogicError, "Conversion Rate Not Provided for Transaction: " & transaction.index.intToStr & " - " & transaction.payee)
 
 proc getExchangeAccount(exchangeAccounts: Table[string, ExchangeAccount],
     referenceCurrencyKey: string, securityCurrencyKey: string): tuple[
@@ -157,7 +157,9 @@ proc convertTransactionReporting(l: Ledger, transaction: Transaction,
 
     if (record.kind == AccountKind.Revenue or record.kind ==
         AccountKind.Expense) and record.currencyKey != reportingCurrencyKey:
-      let conversionRate = getConversionRate(transaction, record.currencyKey, reportingCurrencyKey) # We want to convert to reference, so reference is reference
+      # echo "Reporting Currency: ", reportingCurrencyKey
+      # echo "Searching for conversion rate for: ", record.currencyKey
+      let conversionRate = getConversionRate(transaction, record.currencyKey, reportingCurrencyKey) # We want to convert to reference
       let (exchangeAccount, flipped) = getExchangeAccount(l.accounts.exchange, reportingCurrencyKey, record.currencyKey)
       let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
 
