@@ -1,9 +1,13 @@
-import std/[sugar, strutils, times, strformat]
+import std/[sugar, strutils, times, strformat, sequtils]
+import system
 import options
 import decimal/decimal
 
 import types
 import account
+
+template maxFold(s: seq[auto]): untyped =
+  s.foldl(if a > b: a else: b) 
 
 proc toRateStringSequence(rates: seq[string]): string = 
   result = "["
@@ -55,6 +59,27 @@ proc printIncomeStatement(l: Ledger, reportingCurrencyKey: Option[string], lengt
     echo &"\t--- NET INCOME: {ni} {currencyKey} ---\n"
 
 
+proc printExpenseReport(l: Ledger): void =
+  echo "\t--- EXPENSE REPORT ---\n"
+
+  let maxHeaderLength = l.transactions.filter(t => t.records.any(r => r.kind == AccountKind.Expense)).map(x => ("  " & x.date.format("yyyy-MM-dd") & " " & x.payee).len).maxFold
+  # let maxKeyLength = l.transactions.map(x => x.records.map(r => r.accountKey.splitKey[1..^1].join(":").len).maxFold).maxFold
+  let maxBalanceLength = l.transactions.map(x => x.records.map(r => r.amount.toAccountingString.len).maxFold).maxFold
+
+  for transaction in l.transactions:
+    if transaction.records.filter(x => x.kind == AccountKind.Expense).len > 0:
+
+      echo "| ", transaction.date.format("yyyy-MM-dd"), " - ", transaction.payee
+      for record in transaction.records:
+        if record.kind == AccountKind.Expense:
+          let printableAccountKey = record.accountKey.splitKey[1..^1].join(":")
+          let gap = max(1, maxHeaderLength - printableAccountKey.len)
+          let balanceGap = max(1, maxBalanceLength - record.amount.toAccountingString.len)
+          echo "|  - ", printableAccountKey, spaces(gap), record.currencyKey, spaces(balanceGap), record.amount.toAccountingString, " |"
+
+      echo ""
+
+
 proc printTransactionJournal(transactions: seq[Transaction]) =
   echo "\t--- TRANSACTION JOURNAL ---\n"
 
@@ -83,6 +108,10 @@ proc reportLedger*(ledger: Ledger, reportingCurrencyKey: Option[string], noJourn
 
   echo ""
   printIncomeStatement(ledger, reportingCurrencyKey, maxReportLength)
+  echo ""
+
+  echo ""
+  printExpenseReport(ledger)
   echo ""
 
   if not noJournal:

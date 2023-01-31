@@ -2,3 +2,6 @@ journal/
 nimcache/
 ./main
 test_0
+main
+app
+bin/
