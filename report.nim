@@ -1,4 +1,4 @@
-import std/[sugar, strutils, times, strformat, sequtils]
+import std/[sugar, strutils, times, strformat, sequtils, math]
 import system
 import options
 import decimal/decimal
@@ -65,6 +65,7 @@ proc printExpenseReport(l: Ledger): void =
   let maxHeaderLength = l.transactions.filter(t => t.records.any(r => r.kind == AccountKind.Expense)).map(x => ("  " & x.date.format("yyyy-MM-dd") & " " & x.payee).len).maxFold
   # let maxKeyLength = l.transactions.map(x => x.records.map(r => r.accountKey.splitKey[1..^1].join(":").len).maxFold).maxFold
   let maxBalanceLength = l.transactions.map(x => x.records.map(r => r.amount.toAccountingString.len).maxFold).maxFold
+  let total = l.transactions.map(x => x.records.filter(r => r.kind == AccountKind.Expense).map(r => r.amount).foldl(a + b, newDecimal("0.00"))).foldl(a + b, newDecimal("0.00"))
 
   for transaction in l.transactions:
     if transaction.records.filter(x => x.kind == AccountKind.Expense).len > 0:
@@ -78,6 +79,8 @@ proc printExpenseReport(l: Ledger): void =
           echo "|  - ", printableAccountKey, spaces(gap), record.currencyKey, spaces(balanceGap), record.amount.toAccountingString, " |"
 
       echo ""
+  
+  echo "TOTAL: ", total.toAccountingString
 
 
 proc printTransactionJournal(transactions: seq[Transaction]) =

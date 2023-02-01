@@ -47,7 +47,7 @@ else:
   let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
 
   if (checkTransactions.isOk):
-    ledger = aggregateTransactions(ledger, reportingCurrencyKey)
+    ledger = ledger.aggregateLedger(reportingCurrencyKey)
     reportLedger(ledger, reportingCurrencyKey, noJournal)
   else:
     echo checkTransactions.error
