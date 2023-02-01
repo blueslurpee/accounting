@@ -1,4 +1,4 @@
-import std/[sugar, strutils, times, strformat, sequtils, math]
+import std/[sugar, strutils, times, strformat, sequtils]
 import system
 import options
 import decimal/decimal
