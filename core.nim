@@ -117,15 +117,11 @@ proc verifyTransactions*(transactions: seq[Transaction], verifiers: seq[Verifier
           break verify
 
 
-proc convertTransactionExchanges(l: Ledger): Ledger = 
-  var ledger = l
-
-  for i in 0..ledger.transactions.high:
-    var transaction = ledger.transactions[i]
-
+proc convertTransactionExchanges(ledger: var Ledger): var Ledger = 
+  for transaction in ledger.transactions.mitems:
     if transaction.isMultiCurrency:
       let (referenceCurrencyKey, securityCurrencyKey) = extractCurrencies(transaction)
-      let (exchangeAccount, flipped) = getExchangeAccount(l.accounts.exchange,
+      let (exchangeAccount, flipped) = getExchangeAccount(ledger.accounts.exchange,
           referenceCurrencyKey, securityCurrencyKey)
 
       let referenceDebitAmount = transaction.records.filter(r =>
@@ -153,21 +149,13 @@ proc convertTransactionExchanges(l: Ledger): Ledger =
 
   return ledger
 
-proc convertTransactionReporting(l: Ledger, reportingCurrencyKey: string): Ledger =
-  var ledger = l
-
-  for i in 0..ledger.transactions.high:
-    var transaction = ledger.transactions[i]
-
-    for i in 0..transaction.records.high:
-      var record = transaction.records[i]
-
+proc convertTransactionReporting(ledger: var Ledger, reportingCurrencyKey: string): var Ledger =
+  for transaction in ledger.transactions.mitems:
+    for record in transaction.records.mitems:
       if (record.kind == AccountKind.Revenue or record.kind ==
           AccountKind.Expense) and record.currencyKey != reportingCurrencyKey:
-        # echo "Reporting Currency: ", reportingCurrencyKey
-        # echo "Searching for conversion rate for: ", record.currencyKey
         let conversionRate = getConversionRate(transaction, record.currencyKey, reportingCurrencyKey) # We want to convert to reference
-        let (exchangeAccount, flipped) = getExchangeAccount(l.accounts.exchange, reportingCurrencyKey, record.currencyKey)
+        let (exchangeAccount, flipped) = getExchangeAccount(ledger.accounts.exchange, reportingCurrencyKey, record.currencyKey)
         let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
 
         if record.kind == AccountKind.Revenue:
@@ -189,10 +177,8 @@ proc convertTransactionReporting(l: Ledger, reportingCurrencyKey: string): Ledge
               else:
                 exchangeAccount.securityBalance -= record.amount
                 exchangeAccount.referenceBalance += convertedAmount
-
-          record.amount = convertedAmount 
-          record.accountKey = record.accountKey.replace(record.currencyKey, reportingCurrencyKey)
-          record.currencyKey = reportingCurrencyKey
+          
+          record.convertedAmount = convertedAmount 
 
         if record.kind == AccountKind.Expense:
           case record.norm:
@@ -214,46 +200,31 @@ proc convertTransactionReporting(l: Ledger, reportingCurrencyKey: string): Ledge
                 exchangeAccount.securityBalance -= record.amount
                 exchangeAccount.referenceBalance += convertedAmount
       
-          record.amount = convertedAmount 
-          record.accountKey = record.accountKey.replace(record.currencyKey, reportingCurrencyKey)
-          record.currencyKey = reportingCurrencyKey
-
-      echo "New Record: ", record 
-      transaction.records[i] = record
-
-    echo "New Transaction: ", transaction
-    ledger.transactions[i] = transaction
+          record.convertedAmount = convertedAmount 
 
   return ledger
 
-proc aggregateTransactions(l: Ledger): Ledger =
-  var ledger = l
-
-  for t in ledger.transactions:
-    var transaction = t
-
-    for record in transaction.records:
-      let accountO = l.accounts.findAccount(record.accountKey)
+proc aggregateTransactions(ledger: var Ledger): var Ledger =
+  for transaction in ledger.transactions.mitems:
+    for record in transaction.records.mitems:
+      let accountO = ledger.accounts.findAccount(record.accountKey)
 
       if accountO.isSome:
         let account = accountO.get()
         let currencyKey = record.currencyKey
 
         if account.norm == record.norm:
-          discard account.incrementBalance(currencyKey, record.amount)
+          discard account.incrementBalance(currencyKey, record.convertedAmount)
         else:
-          discard account.decrementBalance(currencyKey, record.amount)
+          discard account.decrementBalance(currencyKey, record.convertedAmount)
 
   return ledger
 
-proc aggregateLedger*(l: Ledger, reportingCurrencyKey: Option[
+proc aggregateLedger*(ledger: Ledger, reportingCurrencyKey: Option[
     string]): Ledger =
-  var ledger = l
-
+  var ledger = ledger
   if reportingCurrencyKey.isSome():
-    ledger = ledger.convertTransactionExchanges().convertTransactionReporting(reportingCurrencyKey.get()).aggregateTransactions()
+    result = ledger.convertTransactionExchanges().convertTransactionReporting(reportingCurrencyKey.get()).aggregateTransactions()
   else:
-    ledger = ledger.convertTransactionExchanges().aggregateTransactions()
-
-  return ledger
+    result = ledger.convertTransactionExchanges().aggregateTransactions()
 

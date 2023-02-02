@@ -116,7 +116,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
       let accountKind = parseKind(($1).split(":")[0])
 
       buffer.transactions[^1].records.add(Record(accountKey: accountKey, kind: accountKind,
-            norm: parseNorm($2), amount: newDecimal($3), currencyKey: currencyKey))
+            norm: parseNorm($2), amount: newDecimal($3), convertedAmount: newDecimal($3), currencyKey: currencyKey))
 
     account <- accountKind * ":" * accountTree
     accountKind <- "Asset" | "Liability" | "Equity" | "Revenue" |

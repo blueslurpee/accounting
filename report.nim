@@ -19,18 +19,18 @@ proc toRateStringSequence(rates: seq[string]): string =
       result = " " & result & s
   result = result & "]"
 
-proc printBalanceSheet(l: Ledger, length: int = -1): void =
+proc printBalanceSheet(l: Ledger, reportingCurrencyKey: Option[string], length: int = -1): void =
   let maxBalanceLength = l.accounts.maxBalanceLength
 
   echo "\t--- BALANCE SHEET ---\n"
   echo ""
-  l.accounts.assets.echoSelf(length, 0, maxBalanceLength)
+  l.accounts.assets.echoSelf(reportingCurrencyKey, length, 0, maxBalanceLength)
     
   echo ""
-  l.accounts.liabilities.echoSelf(length, 0, maxBalanceLength)
+  l.accounts.liabilities.echoSelf(reportingCurrencyKey, length, 0, maxBalanceLength)
 
   echo ""
-  l.accounts.equity.echoSelf(length, 0, maxBalanceLength)
+  l.accounts.equity.echoSelf(reportingCurrencyKey, length, 0, maxBalanceLength)
 
   # echo ""
   # echo spaces(2) & "Exchange Accounts" & "\n"
@@ -47,10 +47,10 @@ proc printIncomeStatement(l: Ledger, reportingCurrencyKey: Option[string], lengt
 
   echo "\t--- INCOME STATEMENT ---\n"
   echo ""
-  l.accounts.revenue.echoSelf(length, 0, maxBalanceLength)
+  l.accounts.revenue.echoSelf(reportingCurrencyKey, length, 0, maxBalanceLength)
 
   echo ""
-  l.accounts.expenses.echoSelf(length, 0, maxBalanceLength)
+  l.accounts.expenses.echoSelf(reportingCurrencyKey, length, 0, maxBalanceLength)
 
   if reportingCurrencyKey.isSome():
     let currencyKey  = reportingCurrencyKey.get()
@@ -59,13 +59,13 @@ proc printIncomeStatement(l: Ledger, reportingCurrencyKey: Option[string], lengt
     echo &"\t--- NET INCOME: {ni} {currencyKey} ---\n"
 
 
-proc printExpenseReport(l: Ledger): void =
+proc printExpenseReport(l: Ledger, reportingCurrencyKey: Option[string]): void =
   echo "\t--- EXPENSE REPORT ---\n"
 
   let maxHeaderLength = l.transactions.filter(t => t.records.any(r => r.kind == AccountKind.Expense)).map(x => ("  " & x.date.format("yyyy-MM-dd") & " " & x.payee).len).maxFold
   # let maxKeyLength = l.transactions.map(x => x.records.map(r => r.accountKey.splitKey[1..^1].join(":").len).maxFold).maxFold
-  let maxBalanceLength = l.transactions.map(x => x.records.map(r => r.amount.toAccountingString.len).maxFold).maxFold
-  let total = l.transactions.map(x => x.records.filter(r => r.kind == AccountKind.Expense).map(r => r.amount).foldl(a + b, newDecimal("0.00"))).foldl(a + b, newDecimal("0.00"))
+  let maxBalanceLength = l.transactions.map(x => x.records.map(r => r.convertedAmount.toAccountingString.len).maxFold).maxFold
+  let total = l.transactions.map(x => x.records.filter(r => r.kind == AccountKind.Expense).map(r => r.convertedAmount).foldl(a + b, newDecimal("0.00"))).foldl(a + b, newDecimal("0.00"))
 
   for transaction in l.transactions:
     if transaction.records.filter(x => x.kind == AccountKind.Expense).len > 0:
@@ -73,10 +73,11 @@ proc printExpenseReport(l: Ledger): void =
       echo "| ", transaction.date.format("yyyy-MM-dd"), " - ", transaction.payee
       for record in transaction.records:
         if record.kind == AccountKind.Expense:
+          let currencyKey = if reportingCurrencyKey.isSome(): reportingCurrencyKey.get() else: record.currencyKey
           let printableAccountKey = record.accountKey.splitKey[1..^1].join(":")
           let gap = max(1, maxHeaderLength - printableAccountKey.len)
-          let balanceGap = max(1, maxBalanceLength - record.amount.toAccountingString.len)
-          echo "|  - ", printableAccountKey, spaces(gap), record.currencyKey, spaces(balanceGap), record.amount.toAccountingString, " |"
+          let balanceGap = max(1, maxBalanceLength - record.convertedAmount.toAccountingString.len)
+          echo "|  - ", printableAccountKey, spaces(gap), currencyKey, spaces(balanceGap), record.convertedAmount.toAccountingString, " |"
 
       echo ""
   
@@ -104,9 +105,9 @@ proc printTransactionJournal(transactions: seq[Transaction]) =
 
 
 proc reportLedger*(ledger: Ledger, reportingCurrencyKey: Option[string], noJournal: bool = false) =
-  let maxReportLength = ledger.accounts.maxReportLength
+  let maxReportLength = ledger.accounts.maxReportLength(reportingCurrencyKey)
   echo ""
-  printBalanceSheet(ledger, maxReportLength)
+  printBalanceSheet(ledger, reportingCurrencyKey, maxReportLength)
   echo ""
 
   echo ""
@@ -114,7 +115,7 @@ proc reportLedger*(ledger: Ledger, reportingCurrencyKey: Option[string], noJourn
   echo ""
 
   echo ""
-  printExpenseReport(ledger)
+  printExpenseReport(ledger, reportingCurrencyKey)
   echo ""
 
   if not noJournal:
