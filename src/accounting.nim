@@ -3,12 +3,12 @@ import tables
 
 import results
 
-import types
-import account
-import parse
-import core
-import report
-import verify
+import accounting/types
+import accounting/account
+import accounting/parse
+import accounting/core
+import accounting/report
+import accounting/verify
 
 proc writeHelp() = echo "Help Command"
 proc writeVersion() = echo "0.0.1"
