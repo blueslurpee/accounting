@@ -77,9 +77,10 @@ type
         accountKey*: string
         kind*: AccountKind
         norm*: Norm
-        amount*: DecimalType
-        convertedAmount*: DecimalType
         currencyKey*: string
+        amount*: DecimalType
+        convertedCurrencyKey*: string
+        convertedAmount*: DecimalType
     Verifier* = proc(transaction: Transaction): R
 
 type

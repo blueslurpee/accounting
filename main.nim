@@ -8,6 +8,7 @@ import account
 import parse
 import core
 import report
+import verify
 
 proc writeHelp() = echo "Help Command"
 proc writeVersion() = echo "0.0.1"
@@ -47,8 +48,8 @@ else:
   let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
 
   if (checkTransactions.isOk):
-    ledger = ledger.aggregateLedger(reportingCurrencyKey)
-    reportLedger(ledger, reportingCurrencyKey, noJournal)
+    ledger = processLedger(ledger, reportingCurrencyKey)
+    ledger.report(reportingCurrencyKey, noJournal)
   else:
     echo checkTransactions.error
 
