@@ -81,6 +81,7 @@ type
         amount*: DecimalType
         convertedCurrencyKey*: string
         convertedAmount*: DecimalType
+        doc*: Option[string]
     Verifier* = proc(transaction: Transaction): R
 
 type

@@ -1,4 +1,4 @@
-import std/[options, times, sugar]
+import std/[options, times, sugar, algorithm]
 import strutils
 import sequtils
 import tables
@@ -41,6 +41,10 @@ proc concatenateKey*(elements: seq[string]): string =
             result = result & ":" & elements[i]
 
 
+proc trimKey*(key: string, depth: int = 1): string = 
+    result = key.splitKey()[depth..^1].concatenateKey()
+
+
 proc truncateKey*(key: string, depth: int = 1): string =
     result = key.splitKey()[0..depth].concatenateKey()
 
@@ -60,6 +64,20 @@ proc aggregation*(tree: AccountTree): seq[Account] =
     result.add(tree.equity.aggregation)
     result.add(tree.revenue.aggregation)
     result.add(tree.expenses.aggregation)
+
+
+proc sort(account: Account): Account =
+    result = account
+    result.children = account.children.map(sort).sorted((x, y) => (if x.key > y.key: 1 else: -1))
+
+
+proc sortAccounts*(tree: AccountTree): AccountTree =
+    result = tree
+    result.assets = result.assets.sort()
+    result.liabilities = result.liabilities.sort()
+    result.equity = result.equity.sort()
+    result.revenue = result.revenue.sort()
+    result.expenses = result.expenses.sort()
 
 
 proc findAccount*(account: Account, queryKey: string, depth: int = 1): Option[Account] =
@@ -188,7 +206,7 @@ proc decrementBalance*(account: Account, currencyKey: string, amount: DecimalTyp
 
 
 proc reportComponents*(account: Account, depth: int = 0, maxBalanceLength: int = 0): tuple[left: string, right: string, remaining: seq[string]] =
-    let left = "| " & spaces(2 * depth) & account.name
+    let left = "| " & spaces(2 * depth) & account.name.trimKey(depth)
     let right = (
         if account.balances.len == 0: 
             "-- | " 

@@ -110,10 +110,11 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
       buffer.index += 1
 
     record <- *Blank * >account * +Blank * >norm * +Blank * >amount * +Blank *
-        >currency * *Blank * ?("@" * *Blank * >rate * *Blank * >currency) * ?"\n":
+        >currency * *Blank * ?("[" * >identifier * "]") * ?"\n":
       let currencyKey = $4
       let accountKey = $1
       let accountKind = parseKind(($1).split(":")[0])
+      let doc: Option[string] = if capture.len == 6: some($5) else: none(string)
 
       buffer.transactions[^1].records.add(
         Record(accountKey: accountKey, 
@@ -122,7 +123,9 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
                currencyKey: currencyKey, 
                amount: newDecimal($3), 
                convertedCurrencyKey: currencyKey, 
-               convertedAmount: newDecimal($3) )
+               convertedAmount: newDecimal($3),
+               doc: doc
+        )
       )
 
     account <- accountKind * ":" * accountTree
@@ -137,6 +140,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     rate <- +Digit * "." * Digit[1..5]
     norm <- "D" | "C"
     currency <- +Alnum
+    identifier <- +Alnum
     date <- Digit[4] * "-" * Digit[2] * "-" * Digit[2]
     payee <- "\"" * *(" " | +Alnum) * "\""
     note <- "\"" * *(" " | +Alnum) * "\""
@@ -146,6 +150,6 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   result = buffer
 
 proc transferBufferToLedger*(buffer: Buffer): Ledger =
-  result.accounts = buffer.accounts
+  result.accounts = buffer.accounts.sortAccounts()
   result.currencies = buffer.currencies
   result.transactions = buffer.transactions

@@ -55,6 +55,7 @@ int main(int argc, char **argv)
 {
     const char *page_title = "Font Demo";
     HPDF_Doc pdf;
+
     char fname[256];
     HPDF_Page page;
     HPDF_Font def_font;
@@ -79,16 +80,15 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Add a new page object. */
+    /* Initialise page */
     page = HPDF_AddPage(pdf);
-
     height = HPDF_Page_GetHeight(page);
     width = HPDF_Page_GetWidth(page);
 
     /* Print the lines of the page. */
     HPDF_Page_SetLineWidth(page, 1);
-    HPDF_Page_Rectangle(page, 50, 50, width - 100, height - 110);
-    HPDF_Page_Stroke(page);
+    // HPDF_Page_Rectangle(page, 50, 50, width - 100, height - 110);
+    // HPDF_Page_Stroke(page);
 
     /* Print the title of the page (with positioning center). */
     def_font = HPDF_GetFont(pdf, "Helvetica", NULL);
@@ -100,34 +100,34 @@ int main(int argc, char **argv)
     HPDF_Page_EndText(page);
 
     /* output subtitle. */
-    HPDF_Page_BeginText(page);
-    HPDF_Page_SetFontAndSize(page, def_font, 16);
-    HPDF_Page_TextOut(page, 60, height - 80, "<Standerd Type1 fonts samples>");
-    HPDF_Page_EndText(page);
+    // HPDF_Page_BeginText(page);
+    // HPDF_Page_SetFontAndSize(page, def_font, 16);
+    // HPDF_Page_TextOut(page, 60, height - 80, "<Standerd Type1 fonts samples>");
+    // HPDF_Page_EndText(page);
 
-    HPDF_Page_BeginText(page);
-    HPDF_Page_MoveTextPos(page, 60, height - 105);
+    // HPDF_Page_BeginText(page);
+    // HPDF_Page_MoveTextPos(page, 60, height - 105);
 
-    i = 0;
-    while (font_list[i])
-    {
-        const char *samp_text = "abcdefgABCDEFG12345!#$%&+-@?";
-        HPDF_Font font = HPDF_GetFont(pdf, font_list[i], NULL);
+    // i = 0;
+    // while (font_list[i])
+    // {
+    //     const char *samp_text = "abcdefgABCDEFG12345!#$%&+-@?";
+    //     HPDF_Font font = HPDF_GetFont(pdf, font_list[i], NULL);
 
-        /* print a label of text */
-        HPDF_Page_SetFontAndSize(page, def_font, 9);
-        HPDF_Page_ShowText(page, font_list[i]);
-        HPDF_Page_MoveTextPos(page, 0, -18);
+    //     /* print a label of text */
+    //     HPDF_Page_SetFontAndSize(page, def_font, 9);
+    //     HPDF_Page_ShowText(page, font_list[i]);
+    //     HPDF_Page_MoveTextPos(page, 0, -18);
 
-        /* print a sample text. */
-        HPDF_Page_SetFontAndSize(page, font, 20);
-        HPDF_Page_ShowText(page, samp_text);
-        HPDF_Page_MoveTextPos(page, 0, -20);
+    //     /* print a sample text. */
+    //     HPDF_Page_SetFontAndSize(page, font, 20);
+    //     HPDF_Page_ShowText(page, samp_text);
+    //     HPDF_Page_MoveTextPos(page, 0, -20);
 
-        i++;
-    }
+    //     i++;
+    // }
 
-    HPDF_Page_EndText(page);
+    // HPDF_Page_EndText(page);
     HPDF_SaveToFile(pdf, fname);
 
     /* clean up */
