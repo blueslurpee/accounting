@@ -46,10 +46,16 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
   let parser = peg("input", buffer: Buffer):
     input <- *Space * *( > decl * *Space)
-    decl <- comment | currencyDecl | exchangeDecl | openDecl | closeDecl | balanceDecl | padDecl |
+    decl <- comment | entityDecl | fiscalYearDecl | currencyDecl | exchangeDecl | openDecl | closeDecl | balanceDecl | padDecl |
         noteDecl | priceDecl | transactionDecl
       
     comment <- "#" * *(1 - "\n") * "\n"
+
+    entityDecl <- "entity" * +Blank * >entity * *Blank * "\n":
+      buffer.entity = $1
+
+    fiscalYearDecl <- "fiscal-year" * +Blank * >fiscalYear * *Blank * "\n":
+      buffer.fiscalYear = ($1).parseInt
 
     currencyDecl <- "currency" * +Blank * >currency * *Blank * ?"\n":
       let currency = Currency(key: $1, index: currencyIndex)
@@ -135,6 +141,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     accountParent <- +Alnum * ":"
     accountLeaf <- +Alnum
 
+    entity <- *(+Alnum * Blank) * +Alnum
+    fiscalYear <- Digit[4]
     exchangeRate <- "@" * *Blank * +Digit * "." * +Digit
     amount <- +Digit * "." * Digit[2]
     rate <- +Digit * "." * Digit[1..5]
@@ -150,6 +158,8 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
   result = buffer
 
 proc transferBufferToLedger*(buffer: Buffer): Ledger =
+  result.entity = buffer.entity
+  result.fiscalYear = buffer.fiscalYear
   result.accounts = buffer.accounts.sortAccounts()
   result.currencies = buffer.currencies
   result.transactions = buffer.transactions

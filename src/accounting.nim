@@ -1,4 +1,4 @@
-import std/[os, times, parseopt, options]
+import std/[os, times, parseopt, options, strutils]
 import tables
 
 import results
@@ -9,6 +9,7 @@ import accounting/parse
 import accounting/core
 import accounting/report
 import accounting/verify
+import accounting/pdf/pdfReport
 
 proc writeHelp() = echo "Help Command"
 proc writeVersion() = echo "0.0.1"
@@ -50,6 +51,7 @@ else:
   if (checkTransactions.isOk):
     ledger = processLedger(ledger, reportingCurrencyKey)
     ledger.report(reportingCurrencyKey, noJournal)
+    ledger.generateExpenseReport(filename.split("/")[^1].split(".")[0])
   else:
     echo checkTransactions.error
 

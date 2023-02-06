@@ -7,3 +7,4 @@ nimcache/
 # Test binaries
 test_0
 src/scratchpad
+*.pdf

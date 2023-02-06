@@ -87,11 +87,15 @@ type
 type
     Buffer* = object
         index*: int
+        entity*: string
+        fiscalYear*: int
         conversionRatesBuffer*: seq[tuple[key: string, rate: DecimalType]]
         accounts*: AccountTree
         currencies*: Table[string, Currency]
         transactions*: seq[Transaction]
     Ledger* = object
+        entity*: string
+        fiscalYear*: int
         accounts*: AccountTree
         currencies*: Table[string, Currency]
         transactions*: seq[Transaction]
