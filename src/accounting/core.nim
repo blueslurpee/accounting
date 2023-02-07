@@ -10,7 +10,7 @@ proc isMultiCurrency*(transaction: Transaction): bool =
   result = currencies.len == 2
 
 
-proc extractCurrencies*(transaction: Transaction): tuple[referenceCurrencyKey: string, securityCurrencyKey: string] =
+func extractCurrencies*(transaction: Transaction): tuple[referenceCurrencyKey: string, securityCurrencyKey: string] =
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
 
   if currencies.len != 2:

@@ -60,12 +60,9 @@ let verifyMultiCurrencyValidCurrencies * : Verifier = proc(
   return R.ok
 
 proc verifyTransactions*(transactions: seq[Transaction], verifiers: seq[Verifier]): R =
-  result = R.ok
-
-  block verify:
-    for transaction in transactions:
-      for verifier in verifiers:
-        let check = verifier(transaction)
-        if check.isErr:
-          result = R.err(check.error)
-          break verify
+  for transaction in transactions:
+    for verifier in verifiers:
+      let check = verifier(transaction)
+      if check.isErr:
+        return R.err(check.error)
+  return R.ok
