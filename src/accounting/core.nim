@@ -5,7 +5,7 @@ import decimal/decimal
 import types
 import account
 
-proc isMultiCurrency*(transaction: Transaction): bool =
+func isMultiCurrency*(transaction: Transaction): bool =
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
   result = currencies.len == 2
 
