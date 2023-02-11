@@ -1,9 +1,13 @@
 import std/[sequtils, sugar, options]
 import tables
 import decimal/decimal
+import results
 
 import types
 import account
+
+type DecimalR = Result[DecimalType, string]
+type RecordR = Result[Record, string]
 
 func isMultiCurrency*(transaction: Transaction): bool =
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
@@ -20,20 +24,20 @@ func extractCurrencies*(transaction: Transaction): tuple[referenceCurrencyKey: s
   return (currencies[0], currencies[1])
 
 
-proc getConversionRate*(conversionRates: seq[tuple[key: string, rate: DecimalType]], referenceCurrencyKey: string, securityCurrencyKey: string, ): DecimalType =
-  if referenceCurrencyKey == securityCurrencyKey: return newDecimal("1.00000")
+proc getConversionRate*(conversionRates: seq[tuple[key: string, rate: DecimalType]], referenceCurrencyKey: string, securityCurrencyKey: string, ): DecimalR =
+  if referenceCurrencyKey == securityCurrencyKey: return DecimalR.ok newDecimal("1.00000")
 
   let queryKey = referenceCurrencyKey & ":" & securityCurrencyKey
   let converseQueryKey = securityCurrencyKey & ":" & referenceCurrencyKey
 
   for (key, rate) in conversionRates:
     if key == queryKey:
-      return rate
+      return DecimalR.ok rate
     elif key == converseQueryKey:
-      return (1 / rate).quantize(rate)
+      return DecimalR.ok (1 / rate).quantize(rate)
 
   # Change to Result Type
-  raise newException(LogicError, "Conversion Rate Not Provided for Transaction")
+  return DecimalR.err "Could not get conversion rate"
 
 
 proc getExchangeAccount(
@@ -53,19 +57,21 @@ proc getExchangeAccount(
   raise newException(LogicError, "Could not find ExchangeAccount")
 
 
-proc mapRecord(r: Record, reportingCurrencyKey: string, conversionRates: seq[tuple[key: string, rate: DecimalType]]): Record = 
+proc mapRecord(r: Record, reportingCurrencyKey: string, conversionRates: seq[tuple[key: string, rate: DecimalType]]): RecordR = 
   if (r.kind == AccountKind.Revenue or r.kind == AccountKind.Expense):
-    let conversionRate = conversionRates.getConversionRate(r.currencyKey, reportingCurrencyKey)
+    let conversionRate = ?(conversionRates.getConversionRate(r.currencyKey, reportingCurrencyKey))
     let convertedAmount = (r.amount * conversionRate).quantize(r.amount)
 
-    return Record(accountKey: r.accountKey, 
-                  kind: r.kind, 
-                  norm: r.norm, 
-                  currencyKey: r.currencyKey, 
-                  amount: r.amount, 
-                  convertedCurrencyKey: reportingCurrencyKey, 
-                  convertedAmount: convertedAmount)
-  return r
+    return RecordR.ok Record(
+                        accountKey: r.accountKey, 
+                        kind: r.kind, 
+                        norm: r.norm, 
+                        currencyKey: r.currencyKey, 
+                        amount: r.amount, 
+                        convertedCurrencyKey: reportingCurrencyKey, 
+                        convertedAmount: convertedAmount
+                      )
+  return RecordR.ok r
 
 
 proc postExchanges(ledger: Ledger, transaction: Transaction) = 
@@ -99,49 +105,52 @@ proc postExchanges(ledger: Ledger, transaction: Transaction) =
 proc postConversions(ledger: Ledger, transaction: Transaction) =
   for record in transaction.records:
     if (record.currencyKey != record.convertedCurrencyKey):
-      let conversionRate = transaction.conversionRates.getConversionRate(record.currencyKey, record.convertedCurrencyKey)
-      let (exchangeAccount, flipped) = ledger.getExchangeAccount(record.currencyKey, record.convertedCurrencyKey)
-      let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
+      let conversionRateR = transaction.conversionRates.getConversionRate(record.currencyKey, record.convertedCurrencyKey)
 
-      if record.kind == AccountKind.Revenue:
-        case record.norm:
-          of Norm.Credit:
-            if flipped:
-              exchangeAccount.referenceBalance += record.amount
-              exchangeAccount.securityBalance -= convertedAmount
-            else:
-              # The canonical case
-              # The transaction directions should be correct
-              # We made revenue in the security, therefore upon conversion we must increase the security balance as it represents an exposure
-              exchangeAccount.securityBalance += record.amount
-              exchangeAccount.referenceBalance -= convertedAmount
-          of Norm.Debit:
-            if flipped:
-              exchangeAccount.referenceBalance -= record.amount
-              exchangeAccount.securityBalance += convertedAmount
-            else:
-              exchangeAccount.securityBalance -= record.amount
-              exchangeAccount.referenceBalance += convertedAmount
+      if conversionRateR.isOk:
+        let conversionRate = conversionRateR.get()
+        let (exchangeAccount, flipped) = ledger.getExchangeAccount(record.currencyKey, record.convertedCurrencyKey)
+        let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
 
-      if record.kind == AccountKind.Expense:
-        case record.norm:
-          of Norm.Credit:
-            if flipped:
-              exchangeAccount.referenceBalance += record.amount
-              exchangeAccount.securityBalance -= convertedAmount
-            else:
-              exchangeAccount.securityBalance += record.amount
-              exchangeAccount.referenceBalance -= convertedAmount
-          of Norm.Debit:
-            if flipped:
-              exchangeAccount.referenceBalance -= record.amount
-              exchangeAccount.securityBalance += convertedAmount
-            else:
-              # The canonical case
-              # The transaction directions should be correct
-              # We record and expense in the security, therefore upon conversion we must decrease the security balance, reducing exposure
-              exchangeAccount.securityBalance -= record.amount
-              exchangeAccount.referenceBalance += convertedAmount
+        if record.kind == AccountKind.Revenue:
+          case record.norm:
+            of Norm.Credit:
+              if flipped:
+                exchangeAccount.referenceBalance += record.amount
+                exchangeAccount.securityBalance -= convertedAmount
+              else:
+                # The canonical case
+                # The transaction directions should be correct
+                # We made revenue in the security, therefore upon conversion we must increase the security balance as it represents an exposure
+                exchangeAccount.securityBalance += record.amount
+                exchangeAccount.referenceBalance -= convertedAmount
+            of Norm.Debit:
+              if flipped:
+                exchangeAccount.referenceBalance -= record.amount
+                exchangeAccount.securityBalance += convertedAmount
+              else:
+                exchangeAccount.securityBalance -= record.amount
+                exchangeAccount.referenceBalance += convertedAmount
+
+        if record.kind == AccountKind.Expense:
+          case record.norm:
+            of Norm.Credit:
+              if flipped:
+                exchangeAccount.referenceBalance += record.amount
+                exchangeAccount.securityBalance -= convertedAmount
+              else:
+                exchangeAccount.securityBalance += record.amount
+                exchangeAccount.referenceBalance -= convertedAmount
+            of Norm.Debit:
+              if flipped:
+                exchangeAccount.referenceBalance -= record.amount
+                exchangeAccount.securityBalance += convertedAmount
+              else:
+                # The canonical case
+                # The transaction directions should be correct
+                # We record and expense in the security, therefore upon conversion we must decrease the security balance, reducing exposure
+                exchangeAccount.securityBalance -= record.amount
+                exchangeAccount.referenceBalance += convertedAmount
 
 
 proc postTransaction(ledger: Ledger, transaction: Transaction) =
@@ -166,7 +175,11 @@ proc processLedger*(ledger: Ledger, reportingCurrencyKey: Option[
   for transaction in result.transactions.mitems:
     if reportingCurrencyKey.isSome():
       let conversionRates = transaction.conversionRates
-      transaction.records = transaction.records.map(r => mapRecord(r, reportingCurrencyKey.get(), conversionRates))
+      let mappedRecords = transaction.records.map(r => mapRecord(r, reportingCurrencyKey.get(), conversionRates))
+
+      if mappedRecords.all(r => r.isOk):
+        # TODO, handle case where not mapped
+        transaction.records = mappedRecords.map(r => r.get())
 
     ledger.postExchanges(transaction)
     ledger.postConversions(transaction) # No effect if no reporting currency

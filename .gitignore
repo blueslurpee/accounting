@@ -3,6 +3,7 @@ nimcache/
 
 # Binary output
 ./accounting
+accounting
 
 # Test binaries
 test_0
