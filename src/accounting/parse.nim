@@ -148,7 +148,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     rate <- +Digit * "." * Digit[1..5]
     norm <- "D" | "C"
     currency <- +Alnum
-    identifier <- +Alnum
+    identifier <- +(Alnum | "_" | ".")
     date <- Digit[4] * "-" * Digit[2] * "-" * Digit[2]
     payee <- "\"" * *(" " | +Alnum) * "\""
     note <- "\"" * *(" " | +Alnum) * "\""
