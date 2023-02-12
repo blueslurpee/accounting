@@ -21,7 +21,7 @@ let verifyEqualDebitsAndCredits*: Verifier = proc(transaction: Transaction): R =
       return R.err "Debits and Credits must sum to 0"
   else:
     let (referenceCurrencyKey, securityCurrencyKey) = extractCurrencies(transaction)
-    let conversionRate = transaction.conversionRates.getConversionRate(referenceCurrencyKey, securityCurrencyKey)
+    let conversionRate = ?transaction.conversionRates.getConversionRate(referenceCurrencyKey, securityCurrencyKey)
 
     let referenceDebitAmount = transaction.records.filter(r =>
         r.currencyKey == referenceCurrencyKey and r.norm == Debit).foldl(a +

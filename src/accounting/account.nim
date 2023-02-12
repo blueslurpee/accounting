@@ -29,11 +29,11 @@ proc newAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open:
     result = Account(key: key, name: name, norm: norm, kind: kind, position: TreePosition.Inner, open: open, balances: @[], children: @[])
 
 
-proc splitKey*(key: string): seq[string] =
+func splitKey*(key: string): seq[string] =
     result = key.split(":")
 
 
-proc concatenateKey*(elements: seq[string]): string =
+func concatenateKey*(elements: seq[string]): string =
     for i in 0..elements.high:
         if i == 0:
             result = result & elements[i]
@@ -41,15 +41,15 @@ proc concatenateKey*(elements: seq[string]): string =
             result = result & ":" & elements[i]
 
 
-proc trimKey*(key: string, depth: int = 1): string = 
+func trimKey*(key: string, depth: int = 1): string = 
     result = key.splitKey()[depth..^1].concatenateKey()
 
 
-proc truncateKey*(key: string, depth: int = 1): string =
+func truncateKey*(key: string, depth: int = 1): string =
     result = key.splitKey()[0..depth].concatenateKey()
 
 
-proc aggregation(account: Account): seq[Account] = 
+func aggregation(account: Account): seq[Account] = 
     if account.children.len == 0:
         result = @[account]
     else:
@@ -58,7 +58,7 @@ proc aggregation(account: Account): seq[Account] =
             result.add(child.aggregation)
 
 
-proc aggregation*(tree: AccountTree): seq[Account] =
+func aggregation*(tree: AccountTree): seq[Account] =
     result.add(tree.assets.aggregation)
     result.add(tree.liabilities.aggregation)
     result.add(tree.equity.aggregation)
@@ -66,12 +66,12 @@ proc aggregation*(tree: AccountTree): seq[Account] =
     result.add(tree.expenses.aggregation)
 
 
-proc sort(account: Account): Account =
+func sort(account: Account): Account =
     result = account
     result.children = account.children.map(sort).sorted((x, y) => (if x.key > y.key: 1 else: -1))
 
 
-proc sortAccounts*(tree: AccountTree): AccountTree =
+func sortAccounts*(tree: AccountTree): AccountTree =
     result = tree
     result.assets = result.assets.sort()
     result.liabilities = result.liabilities.sort()
@@ -80,7 +80,7 @@ proc sortAccounts*(tree: AccountTree): AccountTree =
     result.expenses = result.expenses.sort()
 
 
-proc findAccount*(account: Account, queryKey: string, depth: int = 1): Option[Account] =
+func findAccount*(account: Account, queryKey: string, depth: int = 1): Option[Account] =
     result = none(Account)
 
     if queryKey == account.key:
@@ -100,7 +100,7 @@ proc findAccount*(account: Account, queryKey: string, depth: int = 1): Option[Ac
             return result
 
 
-proc findAccount*(tree: AccountTree, key: string): Option[Account] = 
+func findAccount*(tree: AccountTree, key: string): Option[Account] = 
     let kind = parseKind(key.splitKey()[0])
 
     case kind:
@@ -153,7 +153,7 @@ proc insertAccount*(tree: AccountTree, account: Account): R =
             return tree.insertAccount(immediateParent)
 
 
-proc hasCurrency*(account: Account, queryCurrencyKey: string): bool = 
+func hasCurrency*(account: Account, queryCurrencyKey: string): bool = 
     for (currencyKey, _) in account.balances:
         if currencyKey == queryCurrencyKey:
             return true

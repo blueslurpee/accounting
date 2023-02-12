@@ -36,7 +36,6 @@ proc getConversionRate*(conversionRates: seq[tuple[key: string, rate: DecimalTyp
     elif key == converseQueryKey:
       return DecimalR.ok (1 / rate).quantize(rate)
 
-  # Change to Result Type
   return DecimalR.err "Could not get conversion rate"
 
 
@@ -69,7 +68,8 @@ proc mapRecord(r: Record, reportingCurrencyKey: string, conversionRates: seq[tup
                         currencyKey: r.currencyKey, 
                         amount: r.amount, 
                         convertedCurrencyKey: reportingCurrencyKey, 
-                        convertedAmount: convertedAmount
+                        convertedAmount: convertedAmount,
+                        doc: r.doc
                       )
   return RecordR.ok r
 
