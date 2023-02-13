@@ -12,7 +12,8 @@ const EXPENSE_OFFSET: Real = 120;
 const DOC_OFFSET: Real = 220;
 const ACCOUNT_OFFSET: Real = 300;
 const CURRENCY_OFFSET: Real = 430;
-const ENTRIES_PER_PAGE = 67
+const FIRST_PAGE_ENTRIES = 67
+const ENTRIES_PER_PAGE = 74
 
 proc writeTitle(pdf: DocHandle, page: PageHandle, pageTitle: string, pageSubtitle: string, y: cfloat) = 
     let pageTitle = cstring(pageTitle)
@@ -125,25 +126,43 @@ proc generateExpenseReport*(ledger: Ledger, filename: string) =
     for transaction in ledger.transactions:
         for record in transaction.records:
             if record.kind == AccountKind.Expense:
-                let lIndex = floor(i / ENTRIES_PER_PAGE).toInt
+                let lIndex = if i < FIRST_PAGE_ENTRIES: 0 else: floor((i - FIRST_PAGE_ENTRIES) / ENTRIES_PER_PAGE).toInt + 1
                 let docId = if record.doc.isSome: "[" & record.doc.get() & "]" else: ""
 
-                if i mod ENTRIES_PER_PAGE == 0:
-                    dates.add(@[transaction.date.format("yyyy-MM-dd")])
-                    expenseNames.add(@[transaction.payee])
-                    docIds.add(@[docId])
-                    accountNames.add(@[record.accountKey.trimKey(1)])
-                    currencies.add(@[record.convertedCurrencyKey])
-                    amounts.add(@[record.convertedAmount.toAccountingString])
-                    total += record.convertedAmount
+                if i < FIRST_PAGE_ENTRIES:
+                    if i == 0:
+                        dates.add(@[transaction.date.format("yyyy-MM-dd")])
+                        expenseNames.add(@[transaction.payee])
+                        docIds.add(@[docId])
+                        accountNames.add(@[record.accountKey.trimKey(1)])
+                        currencies.add(@[record.convertedCurrencyKey])
+                        amounts.add(@[record.convertedAmount.toAccountingString])
+                        total += record.convertedAmount
+                    else:
+                        dates[lIndex].add(transaction.date.format("yyyy-MM-dd"))
+                        expenseNames[lIndex].add(transaction.payee)
+                        docIds[lIndex].add(docId)
+                        accountNames[lIndex].add(record.accountKey.trimKey(1))
+                        currencies[lIndex].add(record.convertedCurrencyKey)
+                        amounts[lIndex].add(record.convertedAmount.toAccountingString)
+                        total += record.convertedAmount
                 else:
-                    dates[lIndex].add(transaction.date.format("yyyy-MM-dd"))
-                    expenseNames[lIndex].add(transaction.payee)
-                    docIds[lIndex].add(docId)
-                    accountNames[lIndex].add(record.accountKey.trimKey(1))
-                    currencies[lIndex].add(record.convertedCurrencyKey)
-                    amounts[lIndex].add(record.convertedAmount.toAccountingString)
-                    total += record.convertedAmount
+                    if (i - FIRST_PAGE_ENTRIES) mod ENTRIES_PER_PAGE == 0:
+                        dates.add(@[transaction.date.format("yyyy-MM-dd")])
+                        expenseNames.add(@[transaction.payee])
+                        docIds.add(@[docId])
+                        accountNames.add(@[record.accountKey.trimKey(1)])
+                        currencies.add(@[record.convertedCurrencyKey])
+                        amounts.add(@[record.convertedAmount.toAccountingString])
+                        total += record.convertedAmount
+                    else:
+                        dates[lIndex].add(transaction.date.format("yyyy-MM-dd"))
+                        expenseNames[lIndex].add(transaction.payee)
+                        docIds[lIndex].add(docId)
+                        accountNames[lIndex].add(record.accountKey.trimKey(1))
+                        currencies[lIndex].add(record.convertedCurrencyKey)
+                        amounts[lIndex].add(record.convertedAmount.toAccountingString)
+                        total += record.convertedAmount
 
                 i += 1
 
