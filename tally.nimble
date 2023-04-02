@@ -4,7 +4,8 @@ author        = "cmbothwell"
 description   = "Plain-text accounting written in Nim"
 license       = "MIT"
 srcDir        = "src"
-bin           = @["accounting"]
+binDir        = "bin"
+bin           = @["tally"]
 
 
 # Dependencies

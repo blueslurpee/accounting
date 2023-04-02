@@ -3,13 +3,13 @@ import tables
 
 import results
 
-import accounting/types
-import accounting/account
-import accounting/parse
-import accounting/core
-import accounting/report
-import accounting/verify
-import accounting/pdf/pdfReport
+import tally/types
+import tally/account
+import tally/parse
+import tally/core
+import tally/report
+import tally/verify
+import tally/pdf/pdfReport
 
 proc writeHelp() = echo "Help Command"
 proc writeVersion() = echo "0.0.1"

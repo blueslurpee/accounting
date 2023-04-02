@@ -2,8 +2,7 @@ journal/
 nimcache/
 
 # Binary output
-./accounting
-accounting
+bin/
 
 # Test binaries
 test_0
