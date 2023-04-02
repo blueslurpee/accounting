@@ -102,7 +102,7 @@ proc printTransactionJournal(ledger: Ledger) =
     echo ""
 
 
-proc report*(ledger: Ledger, reportingCurrencyKey: Option[string], noJournal: bool = false) =
+proc report*(ledger: Ledger, reportingCurrencyKey: Option[string], expenseReport: bool = false, journal: bool = false) =
   let maxReportLength = ledger.accounts.maxReportLength
   echo ""
   ledger.printBalanceSheet(maxReportLength)
@@ -112,11 +112,12 @@ proc report*(ledger: Ledger, reportingCurrencyKey: Option[string], noJournal: bo
   ledger.printIncomeStatement(reportingCurrencyKey, maxReportLength)
   echo ""
 
-  echo ""
-  ledger.printExpenseReport()
-  echo ""
+  if expenseReport:
+    echo ""
+    ledger.printExpenseReport()
+    echo ""
 
-  if not noJournal:
+  if journal:
     echo ""
     ledger.printTransactionJournal()
     echo ""
