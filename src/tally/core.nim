@@ -1,4 +1,4 @@
-import std/[sequtils, sugar, options]
+import std/[sequtils, sugar, options, strformat]
 import tables
 import decimal/decimal
 import results
@@ -158,7 +158,7 @@ proc postTransaction(ledger: Ledger, transaction: Transaction) =
     let accountO = ledger.accounts.findAccount(record.accountKey)
 
     if accountO.isNone:
-      raise newException(LogicError, "Account not found")
+      raise newException(LogicError, &"Account: {record.accountKey} not found")
 
     let account = accountO.get()
     let currencyKey = record.convertedCurrencyKey

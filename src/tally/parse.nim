@@ -150,7 +150,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
     currency <- +Alnum
     identifier <- +(Alnum | "_" | ".")
     date <- Digit[4] * "-" * Digit[2] * "-" * Digit[2]
-    payee <- "\"" * *(" " | +Alnum) * "\""
+    payee <- "\"" * *(1 - "\"") * "\""
     note <- "\"" * *(" " | +Alnum) * "\""
 
   let parseResult = parser.matchFile(filename, buffer)
