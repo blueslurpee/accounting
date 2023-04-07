@@ -1,4 +1,5 @@
 journal/
+journal_backup/
 nimcache/
 
 # Binary output
