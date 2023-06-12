@@ -42,11 +42,7 @@ type
     Account* = ref object
         key*: string
         name*: string
-        case position*: TreePosition
-        of Root:
-          discard
-        of Inner:
-          parent*: Account
+        parent*: Option[Account]
         kind*: AccountKind
         norm*: Norm
         open*: DateTime

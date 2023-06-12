@@ -1,6 +1,7 @@
 journal/
 journal_backup/
 nimcache/
+TODO.txt
 
 # Binary output
 bin/

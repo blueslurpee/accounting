@@ -28,6 +28,7 @@ proc generateAccountNodes(nodeList: seq[string]): AccountNode =
 proc parseAccount(key: string, open: DateTime): Account =
   let elements = key.split(":")
   let kind = parseKind(elements[0])
+  let key = if kind == AccountKind.Revenue or kind == AccountKind.Expense: "Equity:" & key else: key
 
   return newAccount(key=key, name=key, kind=kind, norm=kind.toNorm, open=open)
 

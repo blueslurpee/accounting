@@ -8,25 +8,32 @@ import decimal/decimal
 import results
 import types
 
-proc newRootAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account
 proc newAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account
+proc insertAccount*(tree: AccountTree, account: Account): R
 
 
 proc newAccountTree*(defaultOpen: DateTime): AccountTree =
-    result = AccountTree(assets: newRootAccount(key="Asset", name="Assets", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultOpen), 
-                        liabilities: newRootAccount(key="Liability", name="Liabilities", norm=Norm.Credit, kind=AccountKind.Liability, open=defaultOpen),
-                        equity: newRootAccount(key="Equity", name="Equity", norm=Norm.Credit, kind=AccountKind.Equity, open=defaultOpen),
-                        revenue: newRootAccount(key="Revenue", name="Revenue", norm=Norm.Credit, kind=AccountKind.Revenue, open=defaultOpen),
-                        expenses: newRootAccount(key="Expense", name="Expense", norm=Norm.Debit, kind=AccountKind.Expense, open=defaultOpen),
+    let tree = AccountTree(assets: newAccount(key="Asset", name="Assets", norm=Norm.Debit, kind=AccountKind.Asset, open=defaultOpen), 
+                        liabilities: newAccount(key="Liability", name="Liabilities", norm=Norm.Credit, kind=AccountKind.Liability, open=defaultOpen),
+                        equity: newAccount(key="Equity", name="Equity", norm=Norm.Credit, kind=AccountKind.Equity, open=defaultOpen),
+                        revenue: newAccount(key="Equity:Revenue", name="Revenue", norm=Norm.Credit, kind=AccountKind.Revenue, open=defaultOpen),
+                        expenses: newAccount(key="Equity:Expense", name="Expense", norm=Norm.Debit, kind=AccountKind.Expense, open=defaultOpen),
                         exchange: initTable[string, ExchangeAccount]())
 
+    var r: R
 
-proc newRootAccount(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account = 
-    result = Account(key: key, name: name, norm: norm, kind: kind, position: TreePosition.Root, open: open, balances: @[], children: @[])
+    r = tree.insertAccount(tree.revenue)
+    if not r.isOk:
+        raise newException(LogicError, "Could not insert Revenue account")
+    
+    r = tree.insertAccount(tree.expenses)
+    if not r.isOk:
+        raise newException(LogicError, "Could not insert Expenses account")
 
+    return tree
 
 proc newAccount*(key: string, name: string, norm: Norm, kind: AccountKind, open: DateTime): Account = 
-    result = Account(key: key, name: name, norm: norm, kind: kind, position: TreePosition.Inner, open: open, balances: @[], children: @[])
+    result = Account(key: key, name: name, norm: norm, kind: kind, open: open, balances: @[], children: @[])
 
 
 func splitKey*(key: string): seq[string] =
@@ -111,9 +118,9 @@ func findAccount*(tree: AccountTree, key: string): Option[Account] =
         of Equity:
             result = tree.equity.findAccount(key)
         of Revenue:
-            result = tree.revenue.findAccount(key)
+            result = tree.revenue.findAccount("Equity:" & key)
         of Expense:
-            result = tree.expenses.findAccount(key)
+            result = tree.expenses.findAccount("Equity:" & key)
 
 
 proc insertAccount*(tree: AccountTree, account: Account): R =
@@ -138,18 +145,14 @@ proc insertAccount*(tree: AccountTree, account: Account): R =
         let levelDifference = account.key.splitKey.len - parent.key.splitKey.len
 
         if levelDifference == 1:
-            case account.position:
-            of TreePosition.Root:
-                return R.err "Cannot add a root account type"
-            of TreePosition.Inner:
-                parent.children.add(account)
-                account.parent = parent
-                return R.ok
+            parent.children.add(account)
+            account.parent = some(parent)
+            return R.ok
 
         else:
             let immediateParent = newAccount(account.key.truncateKey, account.key.truncateKey, account.norm, account.kind, account.open)
             immediateParent.children.add(account)
-            account.parent = immediateParent
+            account.parent = some(immediateParent)
             return tree.insertAccount(immediateParent)
 
 
@@ -179,10 +182,8 @@ proc incrementBalance*(account: Account, currencyKey: string, amount: DecimalTyp
     else:
         account.balances.add((currencyKey: currencyKey, balance: amount))
 
-    case account.position:
-    of TreePosition.Root: discard
-    of TreePosition.Inner:
-        discard account.parent.incrementBalance(currencyKey, amount)
+    if account.parent.isSome:
+        discard get(account.parent).incrementBalance(currencyKey, amount)
 
     return account
 
@@ -197,10 +198,8 @@ proc decrementBalance*(account: Account, currencyKey: string, amount: DecimalTyp
     else:
         account.balances.add((currencyKey: currencyKey, balance: amount * -1))
 
-    case account.position:
-    of TreePosition.Root: discard
-    of TreePosition.Inner:
-        discard account.parent.decrementBalance(currencyKey, amount)
+    if account.parent.isSome:
+        discard get(account.parent).decrementBalance(currencyKey, amount)
 
     return account
 
