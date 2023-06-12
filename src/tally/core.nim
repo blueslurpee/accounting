@@ -10,11 +10,13 @@ type DecimalR = Result[DecimalType, string]
 type RecordR = Result[Record, string]
 
 func isMultiCurrency*(transaction: Transaction): bool =
+  ## Does a transaction involve more than one currency
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
   result = currencies.len == 2
 
 
-func extractCurrencies*(transaction: Transaction): tuple[referenceCurrencyKey: string, securityCurrencyKey: string] =
+func extractCurrencies*(transaction: Transaction): tuple[
+    referenceCurrencyKey: string, securityCurrencyKey: string] =
   let currencies = transaction.records.map(r => r.currencyKey).deduplicate
 
   if currencies.len != 2:
@@ -24,7 +26,9 @@ func extractCurrencies*(transaction: Transaction): tuple[referenceCurrencyKey: s
   return (currencies[0], currencies[1])
 
 
-proc getConversionRate*(conversionRates: seq[tuple[key: string, rate: DecimalType]], referenceCurrencyKey: string, securityCurrencyKey: string, ): DecimalR =
+proc getConversionRate*(conversionRates: seq[tuple[key: string,
+    rate: DecimalType]], referenceCurrencyKey: string,
+    securityCurrencyKey: string): DecimalR =
   if referenceCurrencyKey == securityCurrencyKey: return DecimalR.ok newDecimal("1.00000")
 
   let queryKey = referenceCurrencyKey & ":" & securityCurrencyKey
@@ -56,30 +60,46 @@ proc getExchangeAccount(
   raise newException(LogicError, "Could not find ExchangeAccount")
 
 
-proc mapRecord(r: Record, reportingCurrencyKey: string, conversionRates: seq[tuple[key: string, rate: DecimalType]]): RecordR = 
+proc mapRecord(r: Record, reportingCurrencyKey: string, conversionRates: seq[
+    tuple[key: string, rate: DecimalType]]): RecordR =
+  ## Maps a transaction record given:
+  ## - the record
+  ## - a reporting currency key
+  ## - the provided conversion rates
+  ## The appled conversion is taken from the conversion rate which corresponds to the record currency and the reporting currency.
+  ## If not found, the original record is returned.
+  ## The return value is a result type
   if (r.kind == AccountKind.Revenue or r.kind == AccountKind.Expense):
-    let conversionRate = ?(conversionRates.getConversionRate(r.currencyKey, reportingCurrencyKey))
+    let conversionRate = ?(conversionRates.getConversionRate(r.currencyKey,
+        reportingCurrencyKey))
     let convertedAmount = (r.amount * conversionRate).quantize(r.amount)
 
     return RecordR.ok Record(
-                        accountKey: r.accountKey, 
-                        kind: r.kind, 
-                        norm: r.norm, 
-                        currencyKey: r.currencyKey, 
-                        amount: r.amount, 
-                        convertedCurrencyKey: reportingCurrencyKey, 
+                        accountKey: r.accountKey,
+                        kind: r.kind,
+                        norm: r.norm,
+                        currencyKey: r.currencyKey,
+                        amount: r.amount,
+                        convertedCurrencyKey: reportingCurrencyKey,
                         convertedAmount: convertedAmount,
                         doc: r.doc
-                      )
+      )
   return RecordR.ok r
 
 
-proc postExchanges(ledger: Ledger, transaction: Transaction) = 
+proc postExchanges(ledger: Ledger, transaction: Transaction) =
+  ## In order to correctly handle multiple currencies without the need for a single base currency,
+  ## transactions that involve more than one currency need to pass their exchanges through
+  ## special "currency-exchange" accounts. These allow currency exchanges to be tracked like any other
+  ## account and reported in the reporting currency. Additionally, these exchange accounts support unrealized gains/losses on
+  ## foreign exchange. For more information, see: https://www.mathstat.dal.ca/~selinger/accounting/tutorial.html#2.2
   if transaction.isMultiCurrency:
     let (referenceCurrencyKey, securityCurrencyKey) = transaction.extractCurrencies()
-    let (exchangeAccount, flipped) = ledger.getExchangeAccount(referenceCurrencyKey, securityCurrencyKey)
+    let (exchangeAccount, flipped) = ledger.getExchangeAccount(
+        referenceCurrencyKey, securityCurrencyKey)
 
-    var referenceDebit, referenceCredit, securityDebit, securityCredit = newDecimal("0.00")
+    var referenceDebit, referenceCredit, securityDebit,
+      securityCredit = newDecimal("0.00")
     for record in transaction.records:
       if (record.currencyKey == referenceCurrencyKey and record.norm == Debit):
         referenceDebit += record.amount
@@ -103,13 +123,19 @@ proc postExchanges(ledger: Ledger, transaction: Transaction) =
 
 
 proc postConversions(ledger: Ledger, transaction: Transaction) =
+  ## This procedure is similar to the above but is solely for reporting in a "unified" currency.
+  ## Instead operating over whole transactions, it operates 'per record' when they are converted
+  ## to the reporting currency. The exchange accounts record the conversion process so that the conversion remains
+  ## "well defined" and the appropriate gain/loss from foreign exchange can be calculated.
   for record in transaction.records:
     if (record.currencyKey != record.convertedCurrencyKey):
-      let conversionRateR = transaction.conversionRates.getConversionRate(record.currencyKey, record.convertedCurrencyKey)
+      let conversionRateR = transaction.conversionRates.getConversionRate(
+          record.currencyKey, record.convertedCurrencyKey)
 
       if conversionRateR.isOk:
         let conversionRate = conversionRateR.get()
-        let (exchangeAccount, flipped) = ledger.getExchangeAccount(record.currencyKey, record.convertedCurrencyKey)
+        let (exchangeAccount, flipped) = ledger.getExchangeAccount(
+            record.currencyKey, record.convertedCurrencyKey)
         let convertedAmount = (record.amount * conversionRate).quantize(record.amount)
 
         if record.kind == AccountKind.Revenue:
@@ -154,6 +180,7 @@ proc postConversions(ledger: Ledger, transaction: Transaction) =
 
 
 proc postTransaction(ledger: Ledger, transaction: Transaction) =
+  # Standard accounting equation, increment/decrement accounts based upon transactions and their associated records/
   for record in transaction.records:
     let accountO = ledger.accounts.findAccount(record.accountKey)
 
@@ -175,7 +202,8 @@ proc processLedger*(ledger: Ledger, reportingCurrencyKey: Option[
   for transaction in result.transactions.mitems:
     if reportingCurrencyKey.isSome():
       let conversionRates = transaction.conversionRates
-      let mappedRecords = transaction.records.map(r => mapRecord(r, reportingCurrencyKey.get(), conversionRates))
+      let mappedRecords = transaction.records.map(r => mapRecord(r,
+          reportingCurrencyKey.get(), conversionRates))
 
       if mappedRecords.all(r => r.isOk):
         # TODO, handle case where not mapped

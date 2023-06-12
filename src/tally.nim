@@ -1,18 +1,28 @@
-import std/[os, times, parseopt, options, strutils]
-import tables
+import std/[os, parseopt, options, strutils, strformat]
 
 import results
 
 import tally/types
-import tally/account
 import tally/parse
 import tally/core
 import tally/report
 import tally/verify
 import tally/pdf/pdfReport
 
-proc writeHelp() = echo "Help Command"
-proc writeVersion() = echo "0.0.1"
+let VERSION = "0.0.1"
+proc writeVersion() = echo VERSION
+proc writeHelp() = echo &"""
+Tally - Plain Text Accounting in Nim Version {VERSION}
+Copyright (c) 2022-2023 by Corey Bothwell
+
+  tally [options] [input_file] 
+
+Options:
+  -r, --report:CURRENCY_KEY         report in specified currency
+  -e, --expense-report              show expense report in output
+  -j, --journal                     show transaction journal in output 
+  -h, --help                        show this help
+  -v, --version                     show version"""
 
 # const filename = "./journal/test_2.txt"
 var filename: string = ""
@@ -40,15 +50,7 @@ for kind, key, value in p.getopt():
 if filename == "":
   writeHelp()
 else:
-  var buffer: Buffer = Buffer(
-      index: 0,
-      conversionRatesBuffer: @[],
-      accounts: newAccountTree(parse("2022-01-01", "yyyy-MM-dd")), 
-      currencies: initTable[string, Currency](),
-      transactions: @[]
-  )
-
-  var ledger = transferBufferToLedger(parseFileIntoBuffer(filename, buffer))
+  var ledger = parseLedger(filename)
   let checkTransactions = verifyTransactions(ledger.transactions, @[verifyMultiCurrencyValidCurrencies, verifyEqualDebitsAndCredits])
 
   if (checkTransactions.isOk):

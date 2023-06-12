@@ -40,8 +40,14 @@ proc parseNorm(norm: string): Norm =
   else:
     raise newException(ValueError, "Invalid Norm")
 
-proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
-  var buffer = buffer
+proc parseLedger*(filename: string): Ledger =
+  var buffer = Buffer(
+      index: 0,
+      conversionRatesBuffer: @[],
+      accounts: newAccountTree(parse("2022-01-01", "yyyy-MM-dd")), 
+      currencies: initTable[string, Currency](),
+      transactions: @[]
+  )
   var currencyIndex = 0
 
   let parser = peg("input", buffer: Buffer):
@@ -155,9 +161,7 @@ proc parseFileIntoBuffer*(filename: string, buffer: Buffer): Buffer =
 
   let parseResult = parser.matchFile(filename, buffer)
   doAssert parseResult.ok
-  result = buffer
 
-proc transferBufferToLedger*(buffer: Buffer): Ledger =
   result.entity = buffer.entity
   result.fiscalYear = buffer.fiscalYear
   result.accounts = buffer.accounts.sortAccounts()

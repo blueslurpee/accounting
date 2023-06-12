@@ -206,7 +206,7 @@ proc decrementBalance*(account: Account, currencyKey: string, amount: DecimalTyp
 
 
 proc reportComponents*(account: Account, depth: int = 0, maxBalanceLength: int = 0): tuple[left: string, right: string, remaining: seq[string]] =
-    let left = "| " & spaces(2 * depth) & account.name.trimKey(depth)
+    let left = "| " & spaces(2 * depth) & account.key.trimKey(depth)
     let right = (
         if account.balances.len == 0: 
             "-- | " 
